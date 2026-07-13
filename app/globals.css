@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* subtle paper grain so the cream doesn't feel flat -- kept very quiet */
+.paper-grain {
+  background-image: radial-gradient(rgba(28, 23, 18, 0.035) 1px, transparent 1px);
+  background-size: 3px 3px;
+}

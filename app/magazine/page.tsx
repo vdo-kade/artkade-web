@@ -6,7 +6,7 @@ const POSTS = [
   {
     slug: "interview-nuwan-shilpa",
     title: "Interview: Nuwan Shilpa",
-    excerpt: "The guest artist behind Art Kade's second stall, on his one-off colourways and process.",
+    excerpt: "The artist behind Art Kade's Nuwan Shilpa stall, on his one-off colourways and process.",
     category: "Interview",
   },
   {

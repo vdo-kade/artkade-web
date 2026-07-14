@@ -37,18 +37,28 @@ export default function AdminLoginPage() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Vendors and admin share this one login page (same pattern, just a
+  // role check instead of a single admin flag -- see middleware.ts). Where
+  // sign-in lands next depends on which role comes back in app_metadata.
+  async function destinationFor(supabase: ReturnType<typeof createClient>) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return user?.app_metadata?.role === "vendor" ? "/vendor" : "/admin/orders";
+  }
+
   async function handleSignIn(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
     if (error) {
+      setLoading(false);
       setError("Invalid email or password.");
       return;
     }
-    router.push("/admin/orders");
+    router.push(await destinationFor(supabase));
     router.refresh();
   }
 
@@ -66,19 +76,19 @@ export default function AdminLoginPage() {
     setLoading(true);
     const supabase = createClient();
     const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
     if (error) {
+      setLoading(false);
       setError("Couldn't set password. Try requesting a new link.");
       return;
     }
-    router.push("/admin/orders");
+    router.push(await destinationFor(supabase));
     router.refresh();
   }
 
   return (
     <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 360, margin: "80px auto" }}>
       <h1 style={{ fontSize: 22, marginBottom: 16 }}>
-        {mode === "signin" ? "Admin login" : "Set your password"}
+        {mode === "signin" ? "Log in" : "Set your password"}
       </h1>
 
       {mode === "signin" ? (
@@ -107,7 +117,7 @@ export default function AdminLoginPage() {
       ) : (
         <form onSubmit={handleSetPassword}>
           <p style={{ marginBottom: 12, color: "#666" }}>
-            Choose a password for your admin account.
+            Choose a password for your account.
           </p>
           <input
             type="password"

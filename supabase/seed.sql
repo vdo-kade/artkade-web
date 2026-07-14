@@ -14,7 +14,7 @@ delete from artists where slug in ('vdokade', 'nuwan-shilpa', 'shilpa-kade');
 insert into artists (slug, name, tagline, accent_color, is_active, sort_order, logo_url) values
   ('vdokade', 'Vdokade', 'Susanthika, Premasiri and the rest of the mess.', '#C08A2E', true, 1,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/logo.png'),
-  ('nuwan-shilpa', 'Nuwan Shilpa', 'Guest stall — his art, his prints, his rules.', '#4C7A64', true, 2, null),
+  ('nuwan-shilpa', 'Nuwan Shilpa', 'His art, his prints, his rules.', '#4C7A64', true, 2, null),
   ('shilpa-kade', 'Shilpa Kade', 'Where Vdokade x Nuwan Shilpa collide.', '#8B5E3C', true, 3, null);
 
 -- Vdokade stickers -- the original seven plus nine new standalone designs.

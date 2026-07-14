@@ -8,6 +8,11 @@
 -- ============================================================
 
 -- ---------- ARTISTS / STALLS ----------
+-- Vendor accounts (one per stall) are plain Supabase Auth users, same as
+-- the admin account -- no separate profiles table. Their app_metadata
+-- carries { role: "vendor", artist_id: "<this table's id>" }, set via the
+-- Auth Admin API the same way the admin account's { role: "admin" } was
+-- set. See middleware.ts and lib/session-role.ts.
 create table artists (
   id uuid primary key default gen_random_uuid(),
   slug text unique not null,               -- e.g. 'vdokade', 'nuwan-shilpa'

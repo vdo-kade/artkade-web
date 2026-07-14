@@ -62,14 +62,14 @@ export default async function AdminOrdersPage() {
     return <AdminOrdersError />;
   }
 
-  // payment_proof_url is a storage path, not a public URL (the "media"
-  // bucket is private) -- sign each one so it can be previewed here.
+  // payment_proof_url is a path in the private "payment-proofs" bucket, not
+  // a public URL -- sign each one so it can be previewed here.
   const ordersWithProof = await Promise.all(
     (orders ?? []).map(async (order) => {
       let proofUrl: string | null = null;
       if (order.payment_proof_url) {
         const { data, error: signError } = await supabase.storage
-          .from("media")
+          .from("payment-proofs")
           .createSignedUrl(order.payment_proof_url, 60 * 60);
         if (signError) {
           console.error("Failed to sign payment proof URL:", signError);

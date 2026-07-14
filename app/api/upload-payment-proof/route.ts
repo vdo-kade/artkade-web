@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// The "media" bucket is private and has no anon INSERT policy on
-// storage.objects (customers placing orders shouldn't get broad write
-// access to storage). This route runs server-side with the service role
-// key -- kept out of the browser bundle -- to accept the upload on their
-// behalf, the same way order review/approval will eventually work.
+// Payment proofs live in their own private "payment-proofs" bucket, kept
+// separate from the public "media" bucket (product/artist photos) so
+// customer uploads never end up publicly reachable. There's no anon
+// INSERT policy on storage.objects for it (customers placing orders
+// shouldn't get broad write access to storage), so this route runs
+// server-side with the service role key -- kept out of the browser
+// bundle -- to accept the upload on their behalf, the same way order
+// review/approval works.
 export async function POST(req: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -28,7 +31,7 @@ export async function POST(req: NextRequest) {
   }
 
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
-  const path = `payment-proofs/${orderNumber}-${Date.now()}.${ext}`;
+  const path = `${orderNumber}-${Date.now()}.${ext}`;
 
   // Never forward raw error text from here to the client -- internal
   // client-library errors (e.g. a malformed key breaking header
@@ -38,7 +41,7 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = createClient(url, serviceKey);
     const { error } = await supabase.storage
-      .from("media")
+      .from("payment-proofs")
       .upload(path, await file.arrayBuffer(), {
         contentType: file.type || "application/octet-stream",
       });

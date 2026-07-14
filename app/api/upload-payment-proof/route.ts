@@ -27,19 +27,36 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const supabase = createClient(url, serviceKey);
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
   const path = `payment-proofs/${orderNumber}-${Date.now()}.${ext}`;
 
-  const { error } = await supabase.storage
-    .from("media")
-    .upload(path, await file.arrayBuffer(), {
-      contentType: file.type || "application/octet-stream",
-    });
+  // Never forward raw error text from here to the client -- internal
+  // client-library errors (e.g. a malformed key breaking header
+  // construction) can embed sensitive values like the service role key
+  // in their message. Log full detail server-side only; the browser only
+  // ever gets a fixed, safe string.
+  try {
+    const supabase = createClient(url, serviceKey);
+    const { error } = await supabase.storage
+      .from("media")
+      .upload(path, await file.arrayBuffer(), {
+        contentType: file.type || "application/octet-stream",
+      });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("Payment proof upload failed:", error);
+      return NextResponse.json(
+        { error: "Upload failed. Please try again." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ path });
+  } catch (err) {
+    console.error("Payment proof upload threw:", err);
+    return NextResponse.json(
+      { error: "Upload failed. Please try again." },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({ path });
 }

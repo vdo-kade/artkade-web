@@ -1,7 +1,7 @@
 import type { Product } from "@/components/ProductCard";
 import type { Stall } from "@/components/StallCard";
 
-type VariantRow = { price: number; stock: number };
+type VariantRow = { id: string; label: string; price: number; stock: number };
 
 type ProductRow = {
   id: string;
@@ -30,7 +30,7 @@ export type ArtistWithProducts = ArtistRow & { products: ProductRow[] };
 // Shared select fragment so the landing page's flat product list and the
 // stall page's nested `artists.products` query stay in sync.
 export const PRODUCT_SELECT =
-  "id, name, category, image_url, is_bestseller, is_one_off, sold_count, sort_order, drop_ends_at, product_variants(price, stock)";
+  "id, name, category, image_url, is_bestseller, is_one_off, sold_count, sort_order, drop_ends_at, product_variants(id, label, price, stock)";
 
 export function formatPriceLabel(variants: VariantRow[]): string {
   if (variants.length === 0) return "";
@@ -50,6 +50,12 @@ export function mapProduct(row: ProductRow): Product {
     isOneOff: row.is_one_off,
     soldCount: row.sold_count,
     dropEndsAt: row.drop_ends_at ?? undefined,
+    variants: row.product_variants.map((v) => ({
+      id: v.id,
+      label: v.label,
+      price: v.price,
+      stock: v.stock,
+    })),
   };
 }
 

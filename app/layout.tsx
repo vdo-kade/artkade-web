@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Work_Sans, IBM_Plex_Mono } from "next/font/google";
+import { BagProvider } from "@/components/BagProvider";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -34,7 +35,7 @@ export default function RootLayout({
       <body
         className={`${fraunces.variable} ${workSans.variable} ${plexMono.variable} font-body bg-cream text-ink`}
       >
-        {children}
+        <BagProvider>{children}</BagProvider>
       </body>
     </html>
   );

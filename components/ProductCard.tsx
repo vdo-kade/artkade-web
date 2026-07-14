@@ -1,4 +1,12 @@
 import Countdown from "./Countdown";
+import AddToBagButton from "./AddToBagButton";
+
+export type ProductVariant = {
+  id: string;
+  label: string;
+  price: number;
+  stock: number;
+};
 
 export type Product = {
   id: string;
@@ -10,6 +18,7 @@ export type Product = {
   isOneOff?: boolean;
   soldCount?: number;
   dropEndsAt?: string;
+  variants?: ProductVariant[];
 };
 
 export default function ProductCard({ product }: { product: Product }) {
@@ -65,6 +74,14 @@ export default function ProductCard({ product }: { product: Product }) {
         )}
         {!!product.soldCount && product.soldCount > 0 && (
           <p className="mt-1 text-xs text-warm-grey">{product.soldCount} sold</p>
+        )}
+        {!soldOut && product.variants && product.variants.length > 0 && (
+          <AddToBagButton
+            productId={product.id}
+            productName={product.name}
+            imageUrl={product.imageUrl}
+            variants={product.variants}
+          />
         )}
       </div>
     </div>

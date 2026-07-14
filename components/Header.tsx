@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useBag } from "./BagProvider";
 
 export default function Header() {
+  const { totalItems } = useBag();
+
   return (
     <header className="sticky top-0 z-40 bg-cream/90 backdrop-blur border-b border-line">
       <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
@@ -19,12 +24,13 @@ export default function Header() {
             Latest Drop
           </Link>
         </nav>
-        <button
+        <Link
+          href="/checkout"
           aria-label="Your bag"
           className="rounded-full border border-line px-4 py-2 text-sm font-medium hover:border-accent hover:text-accent transition-colors"
         >
-          Your Bag
-        </button>
+          Your Bag{totalItems > 0 ? ` (${totalItems})` : ""}
+        </Link>
       </div>
     </header>
   );

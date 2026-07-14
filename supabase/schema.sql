@@ -115,6 +115,24 @@ create table order_status_history (
   created_at timestamptz not null default now()
 );
 
+-- ---------- SETTINGS ----------
+-- Single-row payment instructions shown on the checkout page. Lives in the
+-- DB (not a code config file) specifically so it can be edited directly in
+-- the Supabase dashboard's Table Editor -- no code change or redeploy.
+create table bank_transfer_details (
+  id uuid primary key default gen_random_uuid(),
+  bank_name text not null,
+  branch text not null,
+  account_holder_name text not null,
+  account_number text not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table bank_transfer_details enable row level security;
+
+create policy "public can read bank transfer details" on bank_transfer_details
+  for select using (true);
+
 -- ---------- MAGAZINE ----------
 create table magazine_posts (
   id uuid primary key default gen_random_uuid(),

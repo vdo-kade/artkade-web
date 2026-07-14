@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -10,6 +10,73 @@ import { createClient } from "@/lib/supabase";
 function generateOrderNumber(): string {
   const n = Math.floor(100000 + Math.random() * 900000);
   return `ARTK-${n}`;
+}
+
+type BankDetails = {
+  bank_name: string;
+  branch: string;
+  account_holder_name: string;
+  account_number: string;
+};
+
+function BankTransferDetails() {
+  const [details, setDetails] = useState<BankDetails | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    supabase
+      .from("bank_transfer_details")
+      .select("bank_name, branch, account_holder_name, account_number")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) console.error("Failed to load bank transfer details:", error);
+        setDetails(data ?? null);
+        setLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="border border-line p-4 bg-white mb-6">
+      <h2 className="font-display text-xl mb-3">Pay by bank transfer</h2>
+      {!loaded ? (
+        <p className="text-sm text-warm-grey">Loading payment details...</p>
+      ) : details ? (
+        <dl className="text-sm space-y-1">
+          <div className="flex justify-between gap-4">
+            <dt className="text-warm-grey">Bank</dt>
+            <dd className="font-mono text-right">{details.bank_name}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-warm-grey">Branch</dt>
+            <dd className="font-mono text-right">{details.branch}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-warm-grey">Account holder</dt>
+            <dd className="font-mono text-right">{details.account_holder_name}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-warm-grey">Account number</dt>
+            <dd className="font-mono text-right">{details.account_number}</dd>
+          </div>
+        </dl>
+      ) : (
+        <p className="text-sm text-warm-grey">
+          Payment details aren&apos;t set up yet — please contact us before sending a transfer.
+        </p>
+      )}
+      <p className="text-xs text-warm-grey mt-3">
+        Transfer the total below, then upload a screenshot of the confirmation.
+      </p>
+    </div>
+  );
 }
 
 export default function CheckoutPage() {
@@ -231,6 +298,8 @@ export default function CheckoutPage() {
                   className="w-full border border-line px-3 py-2 text-sm bg-white"
                 />
               </div>
+              <BankTransferDetails />
+
               <div>
                 <label className="block text-xs font-mono uppercase tracking-wide mb-1">
                   Bank transfer screenshot

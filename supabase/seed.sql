@@ -114,3 +114,11 @@ from v, (values
   ('Baby', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/baby.png', 8),
   ('Balla', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/balla.png', 9)
 ) as x(name, image_url, sort_order);
+
+-- Bank transfer details -- placeholder only. Only inserted if the table is
+-- currently empty, so re-running this file later (e.g. to reseed products)
+-- never overwrites the real values once they've been set via the Supabase
+-- dashboard's Table Editor.
+insert into bank_transfer_details (bank_name, branch, account_holder_name, account_number)
+select 'TBD', 'TBD', 'TBD', 'TBD'
+where not exists (select 1 from bank_transfer_details);

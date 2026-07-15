@@ -141,17 +141,24 @@ export async function createProduct(formData: FormData) {
   if (typeof category !== "string" || !CATEGORY_ORDER.includes(category)) return;
   if (session.role === "vendor" && artistId !== session.artistId) return;
 
-  const variants: { label: string; price: number; stock: number }[] = [];
+  const variants: { label: string; price: number; stock: number; packSize: number | null }[] = [];
   for (let i = 0; i < MAX_VARIANT_ROWS; i++) {
     const label = formData.get(`variantLabel-${i}`);
     const price = Number(formData.get(`variantPrice-${i}`));
     const stock = Number(formData.get(`variantStock-${i}`));
+    const packSizeRaw = Number(formData.get(`variantPackSize-${i}`));
     if (typeof label !== "string" || !label.trim()) continue;
     if (!Number.isFinite(price) || price < 0) continue;
     variants.push({
       label: label.trim(),
       price,
       stock: Number.isFinite(stock) && stock > 0 ? Math.floor(stock) : 0,
+      // Sticker pack variants only -- how many sticker_designs the customer
+      // must pick to fill this tier. Ignored/unused for every other
+      // category, same as sticker_pack_selection is unused for non-pack
+      // orders. No DB constraint, validated here like every other numeric
+      // field in this file.
+      packSize: Number.isFinite(packSizeRaw) && packSizeRaw > 0 ? Math.floor(packSizeRaw) : null,
     });
   }
   if (variants.length === 0) return;
@@ -192,7 +199,13 @@ export async function createProduct(formData: FormData) {
   }
 
   await supabase.from("product_variants").insert(
-    variants.map((v) => ({ product_id: product.id, label: v.label, price: v.price, stock: v.stock }))
+    variants.map((v) => ({
+      product_id: product.id,
+      label: v.label,
+      price: v.price,
+      stock: v.stock,
+      pack_size: v.packSize,
+    }))
   );
 
   revalidatePath("/");
@@ -258,12 +271,14 @@ export async function updateProduct(formData: FormData) {
       const label = formData.get(`variantLabel-${variantId}`);
       const price = Number(formData.get(`variantPrice-${variantId}`));
       const stock = Number(formData.get(`variantStock-${variantId}`));
+      const packSizeRaw = Number(formData.get(`variantPackSize-${variantId}`));
       if (typeof label !== "string" || !label.trim()) return null;
       if (!Number.isFinite(price) || price < 0) return null;
       if (!Number.isFinite(stock) || stock < 0) return null;
+      const packSize = Number.isFinite(packSizeRaw) && packSizeRaw > 0 ? Math.floor(packSizeRaw) : null;
       return supabase
         .from("product_variants")
-        .update({ label: label.trim(), price, stock: Math.floor(stock) })
+        .update({ label: label.trim(), price, stock: Math.floor(stock), pack_size: packSize })
         .eq("id", variantId)
         .eq("product_id", productId);
     })
@@ -295,6 +310,126 @@ export async function deleteProduct(formData: FormData) {
 
   revalidatePath("/vendor");
   revalidatePath("/");
+}
+
+// Individual sticker designs a customer picks from to build a custom pack
+// (see the AddToBagButton picker) -- scoped identically to product CRUD
+// above. A vendor needs designs here before any of their sticker_pack
+// variants (pack_size, above) are actually fillable.
+
+async function uploadStickerDesignPhoto(
+  supabase: ReturnType<typeof createAdminClient>,
+  artistSlug: string,
+  file: File
+): Promise<string | null> {
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "png";
+  const path = `sticker-designs/${artistSlug}/${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("media")
+    .upload(path, await file.arrayBuffer(), {
+      contentType: file.type || "application/octet-stream",
+    });
+  if (uploadError) {
+    console.error("Sticker design photo upload failed:", uploadError);
+    return null;
+  }
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from("media").getPublicUrl(path);
+  return publicUrl;
+}
+
+export async function createStickerDesign(formData: FormData) {
+  const session = await getSessionRole();
+  if (!session) return;
+
+  const artistId = formData.get("artistId");
+  const name = formData.get("name");
+  const file = formData.get("photo");
+  if (typeof artistId !== "string" || typeof name !== "string" || !name.trim()) return;
+  if (session.role === "vendor" && artistId !== session.artistId) return;
+
+  const supabase = createAdminClient();
+  const { data: artist } = await supabase.from("artists").select("slug").eq("id", artistId).maybeSingle();
+  if (!artist) return;
+
+  const { count } = await supabase
+    .from("sticker_designs")
+    .select("id", { count: "exact", head: true })
+    .eq("artist_id", artistId);
+
+  let imageUrl: string | null = null;
+  if (file instanceof File && file.size > 0) {
+    imageUrl = await uploadStickerDesignPhoto(supabase, artist.slug, file);
+  }
+
+  const { error } = await supabase.from("sticker_designs").insert({
+    artist_id: artistId,
+    name: name.trim(),
+    image_url: imageUrl,
+    sort_order: count ?? 0,
+  });
+  if (error) console.error("Failed to create sticker design:", error);
+
+  revalidatePath("/vendor");
+}
+
+export async function updateStickerDesign(formData: FormData) {
+  const session = await getSessionRole();
+  if (!session) return;
+
+  const id = formData.get("id");
+  const name = formData.get("name");
+  const isActive = formData.get("isActive") === "on";
+  const file = formData.get("photo");
+  if (typeof id !== "string") return;
+  if (typeof name !== "string" || !name.trim()) return;
+
+  const supabase = createAdminClient();
+
+  let ownerQuery = supabase.from("sticker_designs").select("id, artists(slug)").eq("id", id);
+  if (session.role === "vendor") {
+    ownerQuery = ownerQuery.eq("artist_id", session.artistId);
+  }
+  const { data: existing } = await ownerQuery.maybeSingle<{ id: string; artists: { slug: string } | null }>();
+  if (!existing || !existing.artists) return;
+
+  let imageUrl: string | undefined;
+  if (file instanceof File && file.size > 0) {
+    const uploaded = await uploadStickerDesignPhoto(supabase, existing.artists.slug, file);
+    if (uploaded) imageUrl = uploaded;
+  }
+
+  await supabase
+    .from("sticker_designs")
+    .update({
+      name: name.trim(),
+      is_active: isActive,
+      ...(imageUrl ? { image_url: imageUrl } : {}),
+    })
+    .eq("id", id);
+
+  revalidatePath("/vendor");
+}
+
+export async function deleteStickerDesign(formData: FormData) {
+  const session = await getSessionRole();
+  if (!session) return;
+
+  const id = formData.get("id");
+  if (typeof id !== "string") return;
+
+  const supabase = createAdminClient();
+  let query = supabase.from("sticker_designs").delete().eq("id", id);
+  if (session.role === "vendor") {
+    query = query.eq("artist_id", session.artistId);
+  }
+  const { error } = await query;
+  if (error) console.error("Failed to delete sticker design:", error);
+
+  revalidatePath("/vendor");
 }
 
 export async function changePassword(formData: FormData) {

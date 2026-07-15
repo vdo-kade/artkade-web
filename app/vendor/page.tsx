@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { createClient as createAuthClient } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
@@ -229,6 +230,7 @@ export default async function VendorDashboardPage({
         <h1 style={{ fontSize: 24 }}>{artist.name} — stall dashboard</h1>
         <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "#666" }}>
           {user?.email && <span>{user.email}</span>}
+          <Link href={`/vendor/mode?artist=${artist.slug}`}>Vendor Mode &rarr;</Link>
           <form action={logout}>
             <button type="submit" style={{ padding: "4px 10px", fontSize: 13 }}>
               Log out

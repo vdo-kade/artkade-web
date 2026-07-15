@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { createClient as createAuthClient } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
@@ -194,8 +195,15 @@ export async function createProduct(formData: FormData) {
     variants.map((v) => ({ product_id: product.id, label: v.label, price: v.price, stock: v.stock }))
   );
 
-  revalidatePath("/vendor");
   revalidatePath("/");
+  // A redirect (rather than just revalidatePath) is what actually clears the
+  // "Add a product" form -- it's a plain uncontrolled form with no client JS,
+  // so a same-page re-render leaves the browser's typed-in values sitting in
+  // the DOM. The redirect also carries `created` so the page can scroll to
+  // and confirm the new product (see NewProductToast). ?artist= is preserved
+  // so admin doesn't lose which stall they were managing; harmless no-op for
+  // a vendor session, which ignores it.
+  redirect(`/vendor?artist=${artist.slug}&created=${product.id}`);
 }
 
 export async function updateProduct(formData: FormData) {

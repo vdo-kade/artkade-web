@@ -12,6 +12,7 @@ import {
 } from "./actions";
 import DeleteProductButton from "./DeleteProductButton";
 import PasswordChangeForm from "./PasswordChangeForm";
+import NewProductToast from "./NewProductToast";
 
 export const revalidate = 0;
 
@@ -85,7 +86,7 @@ function VendorDashboardError() {
 export default async function VendorDashboardPage({
   searchParams,
 }: {
-  searchParams: { artist?: string };
+  searchParams: { artist?: string; created?: string };
 }) {
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
@@ -159,6 +160,7 @@ export default async function VendorDashboardPage({
 
   return (
     <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 720, margin: "0 auto" }}>
+      {searchParams.created && <NewProductToast createdId={searchParams.created} />}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
         <h1 style={{ fontSize: 24 }}>{artist.name} — stall dashboard</h1>
         <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "#666" }}>
@@ -287,7 +289,11 @@ export default async function VendorDashboardPage({
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>Products &amp; stock</h2>
         {(products ?? []).length === 0 && <p>No products for this stall yet.</p>}
         {(products ?? []).map((product) => (
-          <div key={product.id} style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
+          <div
+            key={product.id}
+            id={`product-${product.id}`}
+            style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}
+          >
             <form action={updateProduct}>
               <input type="hidden" name="productId" value={product.id} />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

@@ -42,6 +42,23 @@ type ProductRow = {
   product_variants: VariantRow[];
 };
 
+type CollaboratorProductRow = {
+  id: string;
+  artist_id: string;
+  name: string;
+  category: string;
+  product_variants: { label: string; stock: number }[];
+};
+type CollaboratorOrderRow = { id: string; order_items: { product_id: string }[] };
+type CollaboratorStall = {
+  id: string;
+  slug: string;
+  name: string;
+  tagline: string | null;
+  products: CollaboratorProductRow[];
+  pendingOrders: number;
+};
+
 const inputStyle: React.CSSProperties = {
   display: "block",
   width: "100%",
@@ -149,6 +166,53 @@ export default async function VendorDashboardPage({
   if (productsResult.error) {
     console.error("Failed to load products:", productsResult.error);
     return <VendorDashboardError />;
+  }
+
+  // Read-only visibility into a collab stall (e.g. Shilpa Kade has no login
+  // of its own -- Nuwan sees it here instead of getting a second account).
+  // Admin doesn't need this: they already see every stall via the stall
+  // switcher above and the God dashboard.
+  let collaboratorStalls: CollaboratorStall[] = [];
+  if (session.role === "vendor") {
+    const { data: collabRows } = await supabase
+      .from("stall_collaborators")
+      .select("target_artist_id")
+      .eq("viewer_artist_id", session.artistId);
+    const targetIds = (collabRows ?? []).map((r) => r.target_artist_id);
+
+    if (targetIds.length > 0) {
+      const [targetArtistsResult, targetProductsResult, pendingOrdersResult] = await Promise.all([
+        supabase.from("artists").select("id, slug, name, tagline").in("id", targetIds),
+        supabase
+          .from("products")
+          .select("id, artist_id, name, category, product_variants(label, stock)")
+          .in("artist_id", targetIds)
+          .returns<CollaboratorProductRow[]>(),
+        supabase.from("orders").select("id, order_items(product_id)").eq("status", "awaiting_review").returns<CollaboratorOrderRow[]>(),
+      ]);
+
+      const targetProducts = targetProductsResult.data ?? [];
+      const productArtistMap = new Map(targetProducts.map((p) => [p.id, p.artist_id]));
+      const pendingByArtist = new Map<string, Set<string>>();
+      for (const order of pendingOrdersResult.data ?? []) {
+        const artistIdsInOrder = new Set(
+          order.order_items.map((oi) => productArtistMap.get(oi.product_id)).filter((id): id is string => !!id)
+        );
+        for (const aid of artistIdsInOrder) {
+          if (!pendingByArtist.has(aid)) pendingByArtist.set(aid, new Set());
+          pendingByArtist.get(aid)!.add(order.id);
+        }
+      }
+
+      collaboratorStalls = (targetArtistsResult.data ?? []).map((a) => ({
+        id: a.id,
+        slug: a.slug,
+        name: a.name,
+        tagline: a.tagline,
+        products: targetProducts.filter((p) => p.artist_id === a.id),
+        pendingOrders: pendingByArtist.get(a.id)?.size ?? 0,
+      }));
+    }
   }
 
   const artist = artistResult.data;
@@ -367,6 +431,32 @@ export default async function VendorDashboardPage({
           </div>
         ))}
       </section>
+
+      {collaboratorStalls.map((stall) => (
+        <section style={card} key={stall.id}>
+          <h2 style={{ fontSize: 18, marginBottom: 4 }}>
+            {stall.name} <span style={{ fontSize: 12, color: "#666", fontWeight: "normal" }}>(view only)</span>
+          </h2>
+          {stall.tagline && <p style={{ fontSize: 13, color: "#666", marginBottom: 12 }}>{stall.tagline}</p>}
+          <p style={{ fontSize: 13, color: "#666", marginBottom: 12 }}>
+            {stall.pendingOrders} pending order{stall.pendingOrders === 1 ? "" : "s"}
+          </p>
+          {stall.products.length === 0 && <p style={{ fontSize: 13, color: "#999" }}>No products yet.</p>}
+          {stall.products.map((product) => (
+            <div key={product.id} style={{ borderTop: "1px solid #eee", paddingTop: 8, marginTop: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>{product.name}</span>
+                <span style={{ fontSize: 12, color: "#666" }}>{product.category}</span>
+              </div>
+              {product.product_variants.map((v, i) => (
+                <p key={i} style={{ fontSize: 12, color: "#666", margin: "2px 0" }}>
+                  {v.label}: {v.stock} in stock
+                </p>
+              ))}
+            </div>
+          ))}
+        </section>
+      ))}
 
       <section style={card}>
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>Account</h2>

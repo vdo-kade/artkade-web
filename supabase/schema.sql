@@ -30,6 +30,19 @@ create table artists (
   created_at timestamptz not null default now()
 );
 
+-- Read-only cross-stall visibility for collab stalls (e.g. Shilpa Kade is a
+-- Vdokade x Nuwan Shilpa collab with no login of its own -- Nuwan gets a
+-- read-only view of it inside his existing dashboard rather than a second
+-- account). No public policies: staff/vendor-dashboard only, via the
+-- service-role client, same as the orders tables below.
+create table stall_collaborators (
+  id uuid primary key default gen_random_uuid(),
+  viewer_artist_id uuid not null references artists(id) on delete cascade,
+  target_artist_id uuid not null references artists(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (viewer_artist_id, target_artist_id)
+);
+
 -- ---------- PRODUCTS ----------
 create type product_category as enum ('sticker_pack','print','tshirt','digital','freebie','other');
 
@@ -57,7 +70,10 @@ create table product_variants (
   label text not null,          -- e.g. 'A5', 'Medium', '6-pack'
   price numeric(10,2) not null,
   stock int not null default 0, -- null/omit stock tracking for digital & freebies
-  is_active boolean not null default true
+  is_active boolean not null default true,
+  pack_size int                 -- sticker_pack variants only: how many
+                                 -- individual sticker_designs the customer
+                                 -- must pick to fill this tier (e.g. 4/6/10)
 );
 
 -- Individual sticker designs an artist has, used to build a custom pack
@@ -105,8 +121,12 @@ create table order_items (
   order_id uuid not null references orders(id) on delete cascade,
   product_id uuid not null references products(id),
   variant_id uuid references product_variants(id),
-  -- for a build-your-own sticker pack: the specific sticker_design ids chosen,
-  -- e.g. '["<id1>","<id2>","<id3>","<id4>"]' for a 4-pack
+  -- for a build-your-own sticker pack: {id, name} for each design chosen,
+  -- e.g. '[{"id":"<uuid>","name":"Baby"}, ...]' for a 4-pack. Denormalized
+  -- (name copied at order time, not joined live) for the same reason
+  -- unit_price is a snapshot: sticker_designs has no FK from order_items,
+  -- so a design deleted later would otherwise blank out what staff need to
+  -- know when physically packing the order.
   sticker_pack_selection jsonb,
   quantity int not null default 1,
   unit_price numeric(10,2) not null
@@ -118,6 +138,20 @@ create table order_status_history (
   status order_status not null,
   note text,
   created_at timestamptz not null default now()
+);
+
+-- In-person sales a vendor logs at a physical event ("Vendor Mode") --
+-- deliberately separate from orders/order_items: these never go through
+-- the payment-proof/review flow, they just record a sale and decrement
+-- stock immediately. No public policies: staff/vendor-dashboard only.
+create table offline_sales (
+  id uuid primary key default gen_random_uuid(),
+  artist_id uuid not null references artists(id) on delete cascade,
+  product_id uuid not null references products(id) on delete cascade,
+  variant_id uuid not null references product_variants(id) on delete cascade,
+  quantity int not null default 1,
+  unit_price numeric(10,2) not null,
+  sold_at timestamptz not null default now()
 );
 
 -- ---------- SETTINGS ----------
@@ -182,6 +216,8 @@ alter table magazine_posts enable row level security;
 alter table orders enable row level security;
 alter table order_items enable row level security;
 alter table order_status_history enable row level security;
+alter table offline_sales enable row level security;
+alter table stall_collaborators enable row level security;
 
 create policy "public can read active artists" on artists
   for select using (is_active);

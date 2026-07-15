@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { createClient as createAuthClient } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import { CATEGORY_ORDER } from "@/lib/catalogue";
+import { uploadStallPhotoFile, type PhotoField } from "@/lib/storage";
+import { runPopupLifecycleTick } from "@/lib/popup-expiry";
 
 // Every action here re-derives the caller's role/artist from their session
 // (never trusts a client-submitted artistId) and scopes the write to that
@@ -21,6 +23,7 @@ export async function updateStallDetails(formData: FormData) {
   const tagline = formData.get("tagline");
   const bio = formData.get("bio");
   const isPopup = formData.get("isPopup") === "on";
+  const popupStartsAtRaw = formData.get("popupStartsAt");
   const popupEndsAtRaw = formData.get("popupEndsAt");
   if (typeof artistId !== "string" || typeof name !== "string") return;
   if (session.role === "vendor" && artistId !== session.artistId) return;
@@ -28,6 +31,10 @@ export async function updateStallDetails(formData: FormData) {
   // <input type="datetime-local"> submits a local-time string with no
   // timezone (e.g. "2026-08-01T14:30"); the Date constructor parses that
   // as local time, which is the correct interpretation here.
+  const popupStartsAt =
+    typeof popupStartsAtRaw === "string" && popupStartsAtRaw
+      ? new Date(popupStartsAtRaw).toISOString()
+      : null;
   const popupEndsAt =
     typeof popupEndsAtRaw === "string" && popupEndsAtRaw
       ? new Date(popupEndsAtRaw).toISOString()
@@ -41,16 +48,24 @@ export async function updateStallDetails(formData: FormData) {
       tagline: typeof tagline === "string" ? tagline : null,
       bio: typeof bio === "string" ? bio : null,
       is_popup: isPopup,
+      popup_starts_at: popupStartsAt,
       popup_ends_at: popupEndsAt,
     })
     .eq("id", artistId);
+
+  // Applies any consequence of the new dates immediately (e.g. an end date
+  // just pushed into the past archives right away) rather than waiting for
+  // the next cron tick or dashboard visit. Safe to always run: it only ever
+  // activates a currently-inactive scheduled stall whose start has arrived,
+  // or archives a currently-active one whose end has passed -- it never
+  // deactivates a live stall just because its start date moved.
+  await runPopupLifecycleTick(supabase);
 
   revalidatePath("/vendor");
   revalidatePath("/");
 }
 
 const PHOTO_FIELDS = ["logo_url", "hero_image_url"] as const;
-type PhotoField = (typeof PHOTO_FIELDS)[number];
 
 export async function uploadStallPhoto(formData: FormData) {
   const session = await getSessionRole();
@@ -72,22 +87,8 @@ export async function uploadStallPhoto(formData: FormData) {
     .maybeSingle();
   if (!artist) return;
 
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "png";
-  const path = `stalls/${artist.slug}/${field}-${Date.now()}.${ext}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from("media")
-    .upload(path, await file.arrayBuffer(), {
-      contentType: file.type || "application/octet-stream",
-    });
-  if (uploadError) {
-    console.error("Stall photo upload failed:", uploadError);
-    return;
-  }
-
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from("media").getPublicUrl(path);
+  const publicUrl = await uploadStallPhotoFile(supabase, artist.slug, field as PhotoField, file);
+  if (!publicUrl) return;
 
   await supabase
     .from("artists")

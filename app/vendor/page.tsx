@@ -24,6 +24,7 @@ type ArtistRow = {
   logo_url: string | null;
   hero_image_url: string | null;
   is_popup: boolean;
+  popup_starts_at: string | null;
   popup_ends_at: string | null;
 };
 
@@ -127,7 +128,7 @@ export default async function VendorDashboardPage({
   const [artistResult, productsResult] = await Promise.all([
     supabase
       .from("artists")
-      .select("id, slug, name, tagline, bio, logo_url, hero_image_url, is_popup, popup_ends_at")
+      .select("id, slug, name, tagline, bio, logo_url, hero_image_url, is_popup, popup_starts_at, popup_ends_at")
       .eq("id", selectedArtistId)
       .maybeSingle<ArtistRow>(),
     supabase
@@ -208,8 +209,15 @@ export default async function VendorDashboardPage({
           />
           <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
             <input type="checkbox" name="isPopup" defaultChecked={artist.is_popup} /> Pop-up drop
-            (temporary stall with a countdown)
+            (temporary stall with a scheduled window)
           </label>
+          <label style={{ fontSize: 12, color: "#666" }}>Pop-up starts at</label>
+          <input
+            style={inputStyle}
+            type="datetime-local"
+            name="popupStartsAt"
+            defaultValue={toDatetimeLocal(artist.popup_starts_at)}
+          />
           <label style={{ fontSize: 12, color: "#666" }}>Pop-up ends at</label>
           <input
             style={inputStyle}

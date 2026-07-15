@@ -7,7 +7,7 @@ export const revalidate = 0;
 
 const ORDER_SELECT = `id, order_number, customer_name, customer_email, customer_phone, shipping_address,
   total_amount, payment_proof_url, customer_notes, status, reviewed_at, created_at,
-  order_items ( id, quantity, unit_price, products ( name ), product_variants ( label ) )`;
+  order_items ( id, quantity, unit_price, sticker_pack_selection, products ( name ), product_variants ( label ) )`;
 
 type OrderRow = {
   id: string;
@@ -26,6 +26,7 @@ type OrderRow = {
     id: string;
     quantity: number;
     unit_price: number;
+    sticker_pack_selection: { id: string; name: string }[] | null;
     products: { name: string } | null;
     product_variants: { label: string } | null;
   }[];
@@ -104,7 +105,14 @@ function ItemsTable({ items }: { items: OrderRow["order_items"] }) {
       <tbody>
         {items.map((item) => (
           <tr key={item.id}>
-            <td>{item.products?.name ?? "(deleted product)"}</td>
+            <td>
+              {item.products?.name ?? "(deleted product)"}
+              {item.sticker_pack_selection && item.sticker_pack_selection.length > 0 && (
+                <div style={{ fontSize: 12, color: "#666" }}>
+                  Designs: {item.sticker_pack_selection.map((d) => d.name).join(", ")}
+                </div>
+              )}
+            </td>
             <td>{item.product_variants?.label ?? "-"}</td>
             <td>{item.quantity}</td>
             <td>Rs. {item.unit_price.toLocaleString("en-US")}</td>

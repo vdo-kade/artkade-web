@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { useBag } from "@/components/BagProvider";
+import { useBag, bagItemKey } from "@/components/BagProvider";
 import { createClient } from "@/lib/supabase";
 
 function generateOrderNumber(): string {
@@ -151,6 +151,7 @@ export default function CheckoutPage() {
           variant_id: item.variantId,
           quantity: item.quantity,
           unit_price: item.unitPrice,
+          sticker_pack_selection: item.stickerSelection ?? null,
         }))
       );
       if (itemsError) throw itemsError;
@@ -217,7 +218,7 @@ export default function CheckoutPage() {
               <ul className="divide-y divide-line border border-line">
                 {items.map((item) => (
                   <li
-                    key={item.variantId}
+                    key={bagItemKey(item)}
                     className="flex items-center justify-between p-3 text-sm"
                   >
                     <div>
@@ -225,6 +226,11 @@ export default function CheckoutPage() {
                       <p className="text-warm-grey text-xs">
                         {item.variantLabel} × {item.quantity}
                       </p>
+                      {item.stickerSelection && item.stickerSelection.length > 0 && (
+                        <p className="text-warm-grey text-xs mt-1">
+                          Designs: {item.stickerSelection.map((d) => d.name).join(", ")}
+                        </p>
+                      )}
                     </div>
                     <span className="font-mono">
                       Rs. {(item.unitPrice * item.quantity).toLocaleString("en-US")}

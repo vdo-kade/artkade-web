@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
+export type StickerSelection = { id: string; name: string };
+
 export type BagItem = {
   productId: string;
   variantId: string;
@@ -10,13 +12,24 @@ export type BagItem = {
   unitPrice: number;
   quantity: number;
   imageUrl?: string;
+  stickerSelection?: StickerSelection[];
 };
+
+// Cart-line identity: normally just the variant, but a build-your-own
+// sticker pack needs two different custom packs of the SAME variant to be
+// separate lines (they contain different designs), while re-adding the
+// identical selection should still merge quantity like any other item.
+export function bagItemKey(item: Pick<BagItem, "variantId" | "stickerSelection">): string {
+  if (!item.stickerSelection || item.stickerSelection.length === 0) return item.variantId;
+  const sortedIds = item.stickerSelection.map((d) => d.id).sort().join(",");
+  return `${item.variantId}::${sortedIds}`;
+}
 
 type BagContextValue = {
   items: BagItem[];
   addItem: (item: Omit<BagItem, "quantity">, quantity?: number) => void;
-  removeItem: (variantId: string) => void;
-  updateQuantity: (variantId: string, quantity: number) => void;
+  removeItem: (key: string) => void;
+  updateQuantity: (key: string, quantity: number) => void;
   clear: () => void;
   totalItems: number;
   totalAmount: number;
@@ -47,27 +60,26 @@ export function BagProvider({ children }: { children: ReactNode }) {
 
   function addItem(item: Omit<BagItem, "quantity">, quantity = 1) {
     setItems((prev) => {
-      const existing = prev.find((i) => i.variantId === item.variantId);
+      const key = bagItemKey(item);
+      const existing = prev.find((i) => bagItemKey(i) === key);
       if (existing) {
         return prev.map((i) =>
-          i.variantId === item.variantId
-            ? { ...i, quantity: i.quantity + quantity }
-            : i
+          bagItemKey(i) === key ? { ...i, quantity: i.quantity + quantity } : i
         );
       }
       return [...prev, { ...item, quantity }];
     });
   }
 
-  function removeItem(variantId: string) {
-    setItems((prev) => prev.filter((i) => i.variantId !== variantId));
+  function removeItem(key: string) {
+    setItems((prev) => prev.filter((i) => bagItemKey(i) !== key));
   }
 
-  function updateQuantity(variantId: string, quantity: number) {
+  function updateQuantity(key: string, quantity: number) {
     setItems((prev) =>
       quantity <= 0
-        ? prev.filter((i) => i.variantId !== variantId)
-        : prev.map((i) => (i.variantId === variantId ? { ...i, quantity } : i))
+        ? prev.filter((i) => bagItemKey(i) !== key)
+        : prev.map((i) => (bagItemKey(i) === key ? { ...i, quantity } : i))
     );
   }
 

@@ -44,7 +44,7 @@ export default function AdminLoginPage() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    return user?.app_metadata?.role === "vendor" ? "/vendor" : "/admin/orders";
+    return user?.app_metadata?.role === "vendor" ? "/vendor" : "/admin";
   }
 
   async function handleSignIn(e: FormEvent) {

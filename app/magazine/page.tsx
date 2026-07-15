@@ -1,23 +1,27 @@
+import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { createClient } from "@/lib/supabase-server";
 
-// EDIT: replace with supabase.from('magazine_posts').select('*').eq('published', true).order('published_at', {ascending:false})
-const POSTS = [
-  {
-    slug: "interview-nuwan-shilpa",
-    title: "Interview: Nuwan Shilpa",
-    excerpt: "The artist behind Art Kade's Nuwan Shilpa stall, on his one-off colourways and process.",
-    category: "Interview",
-  },
-  {
-    slug: "interview-varsha-vdokade",
-    title: "Interview: Varsha, the artist behind Vdokade",
-    excerpt: "From short-form comedy to the first Art Kade drop — how Vdokade started.",
-    category: "Interview",
-  },
-];
+export const revalidate = 0;
 
-export default function MagazinePage() {
+type PostRow = {
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  category: string | null;
+  hero_image_url: string | null;
+};
+
+export default async function MagazinePage() {
+  const supabase = await createClient();
+  const { data: posts } = await supabase
+    .from("magazine_posts")
+    .select("slug, title, excerpt, category, hero_image_url")
+    .eq("published", true)
+    .order("published_at", { ascending: false })
+    .returns<PostRow[]>();
+
   return (
     <>
       <Header />
@@ -26,13 +30,24 @@ export default function MagazinePage() {
           The Art Kade magazine
         </p>
         <h1 className="font-display text-4xl mb-10">Stories from the kade</h1>
+
+        {(!posts || posts.length === 0) && (
+          <p className="text-warm-grey">Nothing published yet -- check back soon.</p>
+        )}
+
         <div className="space-y-10">
-          {POSTS.map((post) => (
-            <article key={post.slug} className="border-b border-line pb-8">
-              <p className="font-mono text-xs uppercase text-accent mb-2">{post.category}</p>
-              <h2 className="font-display text-2xl mb-2">{post.title}</h2>
-              <p className="text-warm-grey">{post.excerpt}</p>
-            </article>
+          {(posts ?? []).map((post) => (
+            <Link key={post.slug} href={`/magazine/${post.slug}`} className="block group">
+              <article className="border-b border-line pb-8">
+                {post.category && (
+                  <p className="font-mono text-xs uppercase text-accent mb-2">{post.category}</p>
+                )}
+                <h2 className="font-display text-2xl mb-2 group-hover:text-accent transition-colors">
+                  {post.title}
+                </h2>
+                {post.excerpt && <p className="text-warm-grey">{post.excerpt}</p>}
+              </article>
+            </Link>
           ))}
         </div>
       </section>

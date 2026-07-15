@@ -164,6 +164,7 @@ export default async function GodDashboardPage() {
         <h1 style={{ fontSize: 24 }}>All stalls</h1>
         <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "#666" }}>
           <Link href="/admin/orders">Orders &rarr;</Link>
+          <Link href="/admin/magazine">Magazine &rarr;</Link>
           <form action={logout}>
             <button type="submit" style={{ padding: "4px 10px", fontSize: 13 }}>
               Log out

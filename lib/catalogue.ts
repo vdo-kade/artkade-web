@@ -25,7 +25,7 @@ type ArtistRow = {
   popup_ends_at: string | null;
 };
 
-export type ArtistWithProducts = ArtistRow & { products: ProductRow[] };
+export type ArtistWithProducts = ArtistRow & { bio: string | null; products: ProductRow[] };
 
 // Shared select fragment so the landing page's flat product list and the
 // stall page's nested `artists.products` query stay in sync.

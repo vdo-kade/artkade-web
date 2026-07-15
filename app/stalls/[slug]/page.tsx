@@ -20,7 +20,7 @@ export default async function StallPage({ params }: { params: { slug: string } }
   const { data: artist } = await supabase
     .from("artists")
     .select(
-      `slug, name, tagline, accent_color, is_popup, popup_ends_at, products(${PRODUCT_SELECT})`
+      `slug, name, tagline, bio, accent_color, is_popup, popup_ends_at, products(${PRODUCT_SELECT})`
     )
     .eq("slug", params.slug)
     .eq("is_active", true)
@@ -46,6 +46,7 @@ export default async function StallPage({ params }: { params: { slug: string } }
         <div className="mx-auto max-w-3xl">
           <h1 className="font-display text-5xl mb-3">{artist.name}</h1>
           <p className="text-warm-grey">{artist.tagline}</p>
+          {artist.bio && <p className="text-warm-grey mt-3">{artist.bio}</p>}
           {artist.is_popup && artist.popup_ends_at && (
             <p className="mt-4 inline-block bg-ink text-white text-xs font-mono uppercase px-3 py-2">
               Pop-up drop · <Countdown endsAt={artist.popup_ends_at} />

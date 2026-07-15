@@ -44,6 +44,20 @@ const card: React.CSSProperties = {
   marginBottom: 16,
 };
 
+// Never render a raw error/exception message in this page's JSX -- it's a
+// Server Component, so anything here becomes part of the HTML sent to the
+// browser. Internal client-library errors (e.g. a malformed key breaking
+// header construction) can embed sensitive values like the service role
+// key in their message. Log full detail server-side only; the page only
+// ever shows a fixed, safe string.
+function VendorDashboardError() {
+  return (
+    <div style={{ padding: 24, fontFamily: "sans-serif" }}>
+      <p>Failed to load the dashboard. Check the server logs for details.</p>
+    </div>
+  );
+}
+
 export default async function VendorDashboardPage({
   searchParams,
 }: {
@@ -52,7 +66,14 @@ export default async function VendorDashboardPage({
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
 
-  const supabase = createAdminClient();
+  let supabase: ReturnType<typeof createAdminClient>;
+  try {
+    supabase = createAdminClient();
+  } catch (err) {
+    console.error("Failed to create admin Supabase client:", err);
+    return <VendorDashboardError />;
+  }
+
   const authClient = await createAuthClient();
   const {
     data: { user },
@@ -62,10 +83,14 @@ export default async function VendorDashboardPage({
   let selectedArtistId: string;
 
   if (session.role === "admin") {
-    const { data } = await supabase
+    const { data, error: stallListError } = await supabase
       .from("artists")
       .select("id, slug, name")
       .order("sort_order");
+    if (stallListError) {
+      console.error("Failed to load stall list:", stallListError);
+      return <VendorDashboardError />;
+    }
     stallList = data ?? [];
     if (stallList.length === 0) {
       return <div style={{ padding: 24, fontFamily: "sans-serif" }}>No stalls yet.</div>;
@@ -76,7 +101,7 @@ export default async function VendorDashboardPage({
     selectedArtistId = session.artistId;
   }
 
-  const [{ data: artist }, { data: products }] = await Promise.all([
+  const [artistResult, productsResult] = await Promise.all([
     supabase
       .from("artists")
       .select("id, slug, name, tagline, bio, logo_url, hero_image_url")
@@ -89,6 +114,18 @@ export default async function VendorDashboardPage({
       .order("sort_order")
       .returns<ProductRow[]>(),
   ]);
+
+  if (artistResult.error) {
+    console.error("Failed to load artist:", artistResult.error);
+    return <VendorDashboardError />;
+  }
+  if (productsResult.error) {
+    console.error("Failed to load products:", productsResult.error);
+    return <VendorDashboardError />;
+  }
+
+  const artist = artistResult.data;
+  const products = productsResult.data;
 
   if (!artist) {
     return <div style={{ padding: 24, fontFamily: "sans-serif" }}>Stall not found.</div>;

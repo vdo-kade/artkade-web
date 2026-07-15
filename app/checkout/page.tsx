@@ -12,6 +12,8 @@ function generateOrderNumber(): string {
   return `ARTK-${n}`;
 }
 
+const MIN_ORDER_TOTAL = 1350;
+
 type BankDetails = {
   bank_name: string;
   branch: string;
@@ -92,12 +94,21 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
 
+  const amountUnderMinimum = MIN_ORDER_TOTAL - totalAmount;
+  const belowMinimum = items.length > 0 && amountUnderMinimum > 0;
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
 
     if (items.length === 0) {
       setError("Your bag is empty.");
+      return;
+    }
+    if (belowMinimum) {
+      setError(
+        `Minimum order is Rs. ${MIN_ORDER_TOTAL.toLocaleString("en-US")} — add Rs. ${amountUnderMinimum.toLocaleString("en-US")} more to continue.`
+      );
       return;
     }
     if (!file) {
@@ -244,6 +255,12 @@ export default function CheckoutPage() {
                   Rs. {totalAmount.toLocaleString("en-US")}
                 </span>
               </div>
+              {belowMinimum && (
+                <p className="text-sm text-red-600 mt-2">
+                  Minimum order is Rs. {MIN_ORDER_TOTAL.toLocaleString("en-US")} — add Rs.{" "}
+                  {amountUnderMinimum.toLocaleString("en-US")} more to continue.
+                </p>
+              )}
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -323,10 +340,14 @@ export default function CheckoutPage() {
 
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || belowMinimum}
                 className="w-full bg-ink text-white px-7 py-3 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
               >
-                {submitting ? "Placing order..." : "Place order"}
+                {submitting
+                  ? "Placing order..."
+                  : belowMinimum
+                    ? `Add Rs. ${amountUnderMinimum.toLocaleString("en-US")} more to order`
+                    : "Place order"}
               </button>
             </form>
           </div>

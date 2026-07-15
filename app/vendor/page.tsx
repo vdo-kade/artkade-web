@@ -18,6 +18,7 @@ import DeleteProductButton from "./DeleteProductButton";
 import DeleteStickerDesignButton from "./DeleteStickerDesignButton";
 import PasswordChangeForm from "./PasswordChangeForm";
 import NewProductToast from "./NewProductToast";
+import DashboardTabs from "./DashboardTabs";
 
 export const revalidate = 0;
 
@@ -68,10 +69,12 @@ type CollaboratorStall = {
 const inputStyle: React.CSSProperties = {
   display: "block",
   width: "100%",
+  maxWidth: "100%",
   padding: 8,
   marginBottom: 12,
   fontSize: 14,
   boxSizing: "border-box",
+  resize: "vertical",
 };
 
 const card: React.CSSProperties = {
@@ -278,6 +281,9 @@ export default async function VendorDashboardPage({
         </div>
       )}
 
+      <DashboardTabs
+        personal={
+          <>
       <section style={card}>
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>Stall details</h2>
         <form action={updateStallDetails}>
@@ -333,7 +339,10 @@ export default async function VendorDashboardPage({
           />
         </div>
       </section>
-
+          </>
+        }
+        stock={
+          <>
       <section style={card}>
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>Add a product</h2>
         <form action={createProduct}>
@@ -358,11 +367,11 @@ export default async function VendorDashboardPage({
             "Designs per pack" is for sticker packs only -- leave blank otherwise.
           </p>
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-              <input style={{ flex: 2, padding: 6, fontSize: 13 }} name={`variantLabel-${i}`} placeholder="Label (e.g. A5)" />
-              <input style={{ flex: 1, padding: 6, fontSize: 13 }} name={`variantPrice-${i}`} type="number" min={0} step="0.01" placeholder="Price" />
-              <input style={{ flex: 1, padding: 6, fontSize: 13 }} name={`variantStock-${i}`} type="number" min={0} placeholder="Stock" />
-              <input style={{ flex: 1, padding: 6, fontSize: 13 }} name={`variantPackSize-${i}`} type="number" min={1} placeholder="Designs/pack" />
+            <div key={i} style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
+              <input style={{ flex: "2 1 160px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantLabel-${i}`} placeholder="Label (e.g. A5)" />
+              <input style={{ flex: "1 1 90px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantPrice-${i}`} type="number" min={0} step="0.01" placeholder="Price" />
+              <input style={{ flex: "1 1 90px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantStock-${i}`} type="number" min={0} placeholder="Stock" />
+              <input style={{ flex: "1 1 90px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantPackSize-${i}`} type="number" min={1} placeholder="Designs/pack" />
             </div>
           ))}
 
@@ -418,10 +427,10 @@ export default async function VendorDashboardPage({
               </label>
 
               {product.product_variants.map((variant) => (
-                <div key={variant.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <div key={variant.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <input type="hidden" name="variantId" value={variant.id} />
                   <input
-                    style={{ flex: 2, padding: 4, fontSize: 13 }}
+                    style={{ flex: "2 1 140px", minWidth: 0, padding: 4, fontSize: 13, boxSizing: "border-box" }}
                     name={`variantLabel-${variant.id}`}
                     defaultValue={variant.label}
                   />
@@ -432,7 +441,7 @@ export default async function VendorDashboardPage({
                     step="0.01"
                     name={`variantPrice-${variant.id}`}
                     defaultValue={variant.price}
-                    style={{ width: 80, padding: 4 }}
+                    style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
                   />
                   <label style={{ fontSize: 12, color: "#666" }}>Stock</label>
                   <input
@@ -440,7 +449,7 @@ export default async function VendorDashboardPage({
                     min={0}
                     name={`variantStock-${variant.id}`}
                     defaultValue={variant.stock}
-                    style={{ width: 80, padding: 4 }}
+                    style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
                   />
                   <label style={{ fontSize: 12, color: "#666" }}>Designs/pack</label>
                   <input
@@ -448,7 +457,7 @@ export default async function VendorDashboardPage({
                     min={1}
                     name={`variantPackSize-${variant.id}`}
                     defaultValue={variant.pack_size ?? ""}
-                    style={{ width: 80, padding: 4 }}
+                    style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
                   />
                 </div>
               ))}
@@ -544,11 +553,15 @@ export default async function VendorDashboardPage({
           ))}
         </section>
       ))}
-
-      <section style={card}>
-        <h2 style={{ fontSize: 18, marginBottom: 12 }}>Account</h2>
-        <PasswordChangeForm />
-      </section>
+          </>
+        }
+        account={
+          <section style={card}>
+            <h2 style={{ fontSize: 18, marginBottom: 12 }}>Account</h2>
+            <PasswordChangeForm />
+          </section>
+        }
+      />
     </div>
   );
 }

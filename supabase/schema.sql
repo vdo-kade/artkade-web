@@ -187,19 +187,6 @@ create table magazine_posts (
   created_at timestamptz not null default now()
 );
 
--- ---------- HELPFUL VIEW ----------
--- Stock remaining per product across its variants, for the "Only 8 left" tag.
--- security_invoker = true makes the view run as the querying role (anon,
--- authenticated, etc.) instead of its owner, so it respects the
--- product_variants RLS policies below rather than bypassing them --
--- otherwise Postgres treats views as SECURITY DEFINER by default.
-create view product_stock
-  with (security_invoker = true) as
-  select product_id, sum(stock) as total_stock
-  from product_variants
-  where is_active
-  group by product_id;
-
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- Visitors (anon key) can only READ active/published catalogue data.

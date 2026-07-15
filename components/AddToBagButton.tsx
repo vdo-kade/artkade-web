@@ -110,7 +110,13 @@ export default function AddToBagButton({
               setVariantId(e.target.value);
               setPickerOpen(false);
             }}
-            className="border border-line text-xs px-2 py-1.5 bg-white flex-1 min-w-0"
+            className="appearance-none border border-line text-xs pl-2 pr-6 py-1.5 bg-white bg-no-repeat flex-1 min-w-0"
+            style={{
+              backgroundImage:
+                "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%231C1712' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+              backgroundPosition: "right 0.5rem center",
+              backgroundSize: "10px",
+            }}
           >
             {variants.map((v) => (
               <option key={v.id} value={v.id} disabled={v.stock <= 0}>

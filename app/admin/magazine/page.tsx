@@ -23,10 +23,12 @@ type PostRow = {
 const inputStyle: React.CSSProperties = {
   display: "block",
   width: "100%",
+  maxWidth: "100%",
   padding: 8,
   marginBottom: 12,
   fontSize: 14,
   boxSizing: "border-box",
+  resize: "vertical",
 };
 
 const card: React.CSSProperties = {

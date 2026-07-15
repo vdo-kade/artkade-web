@@ -13,7 +13,7 @@ delete from artists where slug in ('vdokade', 'nuwan-shilpa', 'shilpa-kade');
 
 insert into artists (slug, name, tagline, accent_color, is_active, sort_order, logo_url) values
   ('vdokade', 'Vdokade', 'Susanthika, Premasiri and the rest of the mess.', '#C08A2E', true, 1,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/logo.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/logo.png'),
   ('nuwan-shilpa', 'Nuwan Shilpa', 'His art, his prints, his rules.', '#4C7A64', true, 2, null),
   ('shilpa-kade', 'Shilpa Kade', 'Where Vdokade x Nuwan Shilpa collide.', '#8B5E3C', true, 3, null);
 
@@ -26,44 +26,44 @@ insert into products (artist_id, category, name, is_bestseller, sort_order, imag
 select v.id, 'sticker_pack', x.name, x.is_bestseller, x.sort_order, x.image_url
 from v, (values
   ('Premasiri', true, 1,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/premasiri.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/premasiri.png'),
   ('Ammi Ammi Ammi', false, 2,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/ammi-ammi-ammi.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/ammi-ammi-ammi.png'),
   ('Duca', false, 3,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/duca.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/duca.png'),
   ('Kesel Gedi', false, 4,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/kesel-gedi.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/kesel-gedi.png'),
   ('Oneriarchy', false, 5,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/oneriarchal.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/oneriarchal.png'),
   ('Premasiri Thoo Modayek', false, 6,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/premasiri-thoo-modayek.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/premasiri-thoo-modayek.png'),
   ('Ringtone', false, 7,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/ringtone.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/ringtone.png'),
   ('Computer Cop', false, 9,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/cop-computer.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/cop-computer.png'),
   ('Cop Hands Up', false, 10,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/cop-hand-up.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/cop-hand-up.png'),
   ('Dad Standing', false, 11,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/dad-standing.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/dad-standing.png'),
   ('Prema Waving', false, 12,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/prema-waving.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/prema-waving.png'),
   ('Sir In The Office Chair', false, 13,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/sir-office-chair.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/sir-office-chair.png'),
   ('Susie Carries Prema', false, 14,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/susie-carries-prema.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/susie-carries-prema.png'),
   ('Susie Skydiver', false, 15,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/susie-skydiver.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/susie-skydiver.png'),
   ('Baby', false, 16,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/baby.png'),
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/baby.png'),
   ('Balla', false, 17,
-    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/balla.png')
+    'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/balla.png')
 ) as x(name, is_bestseller, sort_order, image_url);
 
 -- Vdokade print -- uses the dedicated A3 poster artwork.
 with v as (select id from artists where slug = 'vdokade')
 insert into products (artist_id, category, name, sort_order, image_url)
 select v.id, 'print', 'Susanthika & Premasiri Print', 8,
-  'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/a3%20Poster%20-%20VDO-%2006-01-2026.png'
+  'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Prints/a3%20Poster%20-%20VDO-%2006-01-2026.png'
 from v;
 
 -- Shilpa Kade collab print.
@@ -104,15 +104,15 @@ with v as (select id from artists where slug = 'vdokade')
 insert into sticker_designs (artist_id, name, image_url, sort_order)
 select v.id, x.name, x.image_url, x.sort_order
 from v, (values
-  ('Computer Cop', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/cop-computer.png', 1),
-  ('Cop Hands Up', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/cop-hand-up.png', 2),
-  ('Dad Standing', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/dad-standing.png', 3),
-  ('Prema Waving', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/prema-waving.png', 4),
-  ('Sir In The Office Chair', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/sir-office-chair.png', 5),
-  ('Susie Carries Prema', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/susie-carries-prema.png', 6),
-  ('Susie Skydiver', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/susie-skydiver.png', 7),
-  ('Baby', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/baby.png', 8),
-  ('Balla', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/balla.png', 9)
+  ('Computer Cop', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/cop-computer.png', 1),
+  ('Cop Hands Up', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/cop-hand-up.png', 2),
+  ('Dad Standing', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/dad-standing.png', 3),
+  ('Prema Waving', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/prema-waving.png', 4),
+  ('Sir In The Office Chair', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/sir-office-chair.png', 5),
+  ('Susie Carries Prema', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/susie-carries-prema.png', 6),
+  ('Susie Skydiver', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/susie-skydiver.png', 7),
+  ('Baby', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/baby.png', 8),
+  ('Balla', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/balla.png', 9)
 ) as x(name, image_url, sort_order);
 
 -- Bank transfer details -- placeholder only. Only inserted if the table is

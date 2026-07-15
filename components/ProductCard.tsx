@@ -48,7 +48,7 @@ export default function ProductCard({ product }: { product: Product }) {
           <img
             src={product.imageUrl}
             alt={product.name}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover transition-transform duration-200 ease-out hover:scale-110"
           />
         ) : (
           <span className="text-warm-grey text-xs font-mono">photo coming soon</span>

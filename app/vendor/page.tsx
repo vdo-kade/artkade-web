@@ -3,7 +3,15 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { createClient as createAuthClient } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import { logout } from "@/app/admin/actions";
-import { updateStallDetails, uploadStallPhoto, updateProductAndStock } from "./actions";
+import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/catalogue";
+import {
+  updateStallDetails,
+  uploadStallPhoto,
+  createProduct,
+  updateProduct,
+} from "./actions";
+import DeleteProductButton from "./DeleteProductButton";
+import PasswordChangeForm from "./PasswordChangeForm";
 
 export const revalidate = 0;
 
@@ -15,6 +23,8 @@ type ArtistRow = {
   bio: string | null;
   logo_url: string | null;
   hero_image_url: string | null;
+  is_popup: boolean;
+  popup_ends_at: string | null;
 };
 
 type VariantRow = { id: string; label: string; price: number; stock: number };
@@ -22,6 +32,8 @@ type ProductRow = {
   id: string;
   category: string;
   name: string;
+  description: string | null;
+  image_url: string | null;
   is_active: boolean;
   is_one_off: boolean;
   sold_count: number;
@@ -43,6 +55,17 @@ const card: React.CSSProperties = {
   padding: 16,
   marginBottom: 16,
 };
+
+// <input type="datetime-local"> wants "YYYY-MM-DDTHH:mm" in the viewer's
+// local time; this renders the stored UTC timestamp using the server's
+// local time, which is an accepted simplification for this dashboard's
+// single-timezone use (see app/vendor/actions.ts for the reverse conversion).
+function toDatetimeLocal(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 // Never render a raw error/exception message in this page's JSX -- it's a
 // Server Component, so anything here becomes part of the HTML sent to the
@@ -104,12 +127,14 @@ export default async function VendorDashboardPage({
   const [artistResult, productsResult] = await Promise.all([
     supabase
       .from("artists")
-      .select("id, slug, name, tagline, bio, logo_url, hero_image_url")
+      .select("id, slug, name, tagline, bio, logo_url, hero_image_url, is_popup, popup_ends_at")
       .eq("id", selectedArtistId)
       .maybeSingle<ArtistRow>(),
     supabase
       .from("products")
-      .select("id, category, name, is_active, is_one_off, sold_count, product_variants(id, label, price, stock)")
+      .select(
+        "id, category, name, description, image_url, is_active, is_one_off, sold_count, product_variants(id, label, price, stock)"
+      )
       .eq("artist_id", selectedArtistId)
       .order("sort_order")
       .returns<ProductRow[]>(),
@@ -181,6 +206,17 @@ export default async function VendorDashboardPage({
             name="bio"
             defaultValue={artist.bio ?? ""}
           />
+          <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
+            <input type="checkbox" name="isPopup" defaultChecked={artist.is_popup} /> Pop-up drop
+            (temporary stall with a countdown)
+          </label>
+          <label style={{ fontSize: 12, color: "#666" }}>Pop-up ends at</label>
+          <input
+            style={inputStyle}
+            type="datetime-local"
+            name="popupEndsAt"
+            defaultValue={toDatetimeLocal(artist.popup_ends_at)}
+          />
           <button type="submit" style={{ padding: "6px 14px" }}>
             Save details
           </button>
@@ -206,44 +242,121 @@ export default async function VendorDashboardPage({
       </section>
 
       <section style={card}>
+        <h2 style={{ fontSize: 18, marginBottom: 12 }}>Add a product</h2>
+        <form action={createProduct}>
+          <input type="hidden" name="artistId" value={artist.id} />
+          <label style={{ fontSize: 12, color: "#666" }}>Name</label>
+          <input style={inputStyle} name="name" required />
+          <label style={{ fontSize: 12, color: "#666" }}>Description</label>
+          <textarea style={{ ...inputStyle, minHeight: 70 }} name="description" />
+          <label style={{ fontSize: 12, color: "#666" }}>Category</label>
+          <select style={inputStyle} name="category" defaultValue={CATEGORY_ORDER[0]} required>
+            {CATEGORY_ORDER.map((cat) => (
+              <option key={cat} value={cat}>
+                {CATEGORY_LABELS[cat]}
+              </option>
+            ))}
+          </select>
+          <label style={{ fontSize: 12, color: "#666" }}>Photo</label>
+          <input style={{ marginBottom: 12, fontSize: 12 }} type="file" name="photo" accept="image/*" />
+
+          <p style={{ fontSize: 13, marginBottom: 6 }}>Variants (label, price, stock) — fill in at least one</p>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+              <input style={{ flex: 2, padding: 6, fontSize: 13 }} name={`variantLabel-${i}`} placeholder="Label (e.g. A5)" />
+              <input style={{ flex: 1, padding: 6, fontSize: 13 }} name={`variantPrice-${i}`} type="number" min={0} step="0.01" placeholder="Price" />
+              <input style={{ flex: 1, padding: 6, fontSize: 13 }} name={`variantStock-${i}`} type="number" min={0} placeholder="Stock" />
+            </div>
+          ))}
+
+          <button type="submit" style={{ padding: "6px 14px", marginTop: 8 }}>
+            Add product
+          </button>
+        </form>
+      </section>
+
+      <section style={card}>
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>Products &amp; stock</h2>
         {(products ?? []).length === 0 && <p>No products for this stall yet.</p>}
         {(products ?? []).map((product) => (
-          <form
-            action={updateProductAndStock}
-            key={product.id}
-            style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}
-          >
-            <input type="hidden" name="productId" value={product.id} />
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <strong>{product.name}</strong>
-              <span style={{ fontSize: 12, color: "#666" }}>
-                {product.category} · {product.sold_count} sold
-              </span>
-            </div>
-            <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
-              <input type="checkbox" name="isActive" defaultChecked={product.is_active} /> Active
-              (visible on the stall)
-            </label>
-            {product.product_variants.map((variant) => (
-              <div key={variant.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <input type="hidden" name="variantId" value={variant.id} />
-                <span style={{ fontSize: 13, flex: 1 }}>{variant.label}</span>
-                <label style={{ fontSize: 12, color: "#666" }}>Stock</label>
-                <input
-                  type="number"
-                  min={0}
-                  name={`stock-${variant.id}`}
-                  defaultValue={variant.stock}
-                  style={{ width: 80, padding: 4 }}
-                />
+          <div key={product.id} style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
+            <form action={updateProduct}>
+              <input type="hidden" name="productId" value={product.id} />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <strong>{product.name}</strong>
+                <span style={{ fontSize: 12, color: "#666" }}>{product.sold_count} sold</span>
               </div>
-            ))}
-            <button type="submit" style={{ padding: "6px 14px", marginTop: 8 }}>
-              Save changes
-            </button>
-          </form>
+
+              {product.image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={product.image_url}
+                  alt={product.name}
+                  style={{ maxWidth: 120, maxHeight: 120, margin: "8px 0", border: "1px solid #ccc" }}
+                />
+              )}
+
+              <label style={{ fontSize: 12, color: "#666" }}>Name</label>
+              <input style={inputStyle} name="name" defaultValue={product.name} required />
+              <label style={{ fontSize: 12, color: "#666" }}>Description</label>
+              <textarea style={{ ...inputStyle, minHeight: 60 }} name="description" defaultValue={product.description ?? ""} />
+              <label style={{ fontSize: 12, color: "#666" }}>Category</label>
+              <select style={inputStyle} name="category" defaultValue={product.category} required>
+                {CATEGORY_ORDER.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {CATEGORY_LABELS[cat]}
+                  </option>
+                ))}
+              </select>
+              <label style={{ fontSize: 12, color: "#666" }}>Replace photo</label>
+              <input style={{ marginBottom: 12, fontSize: 12 }} type="file" name="photo" accept="image/*" />
+
+              <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
+                <input type="checkbox" name="isActive" defaultChecked={product.is_active} /> Active
+                (visible on the stall)
+              </label>
+
+              {product.product_variants.map((variant) => (
+                <div key={variant.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <input type="hidden" name="variantId" value={variant.id} />
+                  <input
+                    style={{ flex: 2, padding: 4, fontSize: 13 }}
+                    name={`variantLabel-${variant.id}`}
+                    defaultValue={variant.label}
+                  />
+                  <label style={{ fontSize: 12, color: "#666" }}>Price</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    name={`variantPrice-${variant.id}`}
+                    defaultValue={variant.price}
+                    style={{ width: 80, padding: 4 }}
+                  />
+                  <label style={{ fontSize: 12, color: "#666" }}>Stock</label>
+                  <input
+                    type="number"
+                    min={0}
+                    name={`variantStock-${variant.id}`}
+                    defaultValue={variant.stock}
+                    style={{ width: 80, padding: 4 }}
+                  />
+                </div>
+              ))}
+              <button type="submit" style={{ padding: "6px 14px", marginTop: 8 }}>
+                Save changes
+              </button>
+            </form>
+            <div style={{ marginTop: 8 }}>
+              <DeleteProductButton productId={product.id} productName={product.name} />
+            </div>
+          </div>
         ))}
+      </section>
+
+      <section style={card}>
+        <h2 style={{ fontSize: 18, marginBottom: 12 }}>Account</h2>
+        <PasswordChangeForm />
       </section>
     </div>
   );

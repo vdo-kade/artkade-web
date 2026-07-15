@@ -26,10 +26,16 @@ export default async function LandingPage() {
       .select("slug, name, tagline, accent_color, is_popup, popup_ends_at")
       .eq("is_active", true)
       .order("sort_order"),
+    // Inner-joined against artists.is_active so a product doesn't leak here
+    // just because its own is_active is still true -- an archived (e.g.
+    // expired pop-up) stall's products must vanish from this feed even if
+    // no one has touched the individual product rows. /stalls/[slug] is
+    // already safe on its own: it 404s straight off artists.is_active.
     supabase
       .from("products")
-      .select(PRODUCT_SELECT)
+      .select(`${PRODUCT_SELECT}, artists!inner(is_active)`)
       .eq("is_active", true)
+      .eq("artists.is_active", true)
       .order("sort_order")
       .limit(4),
   ]);

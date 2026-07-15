@@ -44,7 +44,7 @@ export default function StickerWheel({ images }: { images: WheelImage[] }) {
   return (
     <div
       aria-hidden
-      className="hidden lg:flex flex-col items-center gap-3 fixed right-6 top-1/2 -translate-y-1/2 z-30 pointer-events-none"
+      className="hidden lg:flex flex-col items-center gap-4 fixed right-8 top-1/2 -translate-y-1/2 z-30 pointer-events-none"
     >
       {images.map((img, i) => {
         const distance = Math.abs(i - activeIndex);
@@ -55,8 +55,8 @@ export default function StickerWheel({ images }: { images: WheelImage[] }) {
             key={img.id}
             className="rounded-full overflow-hidden border-2 border-white shadow-md transition-all duration-300 ease-out"
             style={{
-              width: 64 * scale,
-              height: 64 * scale,
+              width: 104 * scale,
+              height: 104 * scale,
               opacity,
             }}
           >

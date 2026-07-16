@@ -3,6 +3,8 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getSessionRole } from "@/lib/session-role";
 import { recordOfflineSale } from "../mode-actions";
+import EndOfDayPanel from "./EndOfDayPanel";
+import AdminNav from "@/components/AdminNav";
 
 export const revalidate = 0;
 
@@ -13,6 +15,7 @@ type SaleRow = {
   id: string;
   quantity: number;
   unit_price: number;
+  notes: string | null;
   sold_at: string;
   products: { name: string } | null;
   product_variants: { label: string } | null;
@@ -74,7 +77,7 @@ export default async function VendorModePage({ searchParams }: { searchParams: {
       .returns<ProductRow[]>(),
     supabase
       .from("offline_sales")
-      .select("id, quantity, unit_price, sold_at, products(name), product_variants(label)")
+      .select("id, quantity, unit_price, notes, sold_at, products(name), product_variants(label)")
       .eq("artist_id", selectedArtistId)
       .gte("sold_at", startOfToday.toISOString())
       .order("sold_at", { ascending: false })
@@ -98,7 +101,9 @@ export default async function VendorModePage({ searchParams }: { searchParams: {
   const todayTotal = todaySales.reduce((sum, s) => sum + s.quantity * s.unit_price, 0);
 
   return (
-    <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 560, margin: "0 auto" }}>
+    <>
+      <AdminNav role={session.role} />
+      <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 560, margin: "0 auto" }}>
       <p style={{ marginBottom: 16 }}>
         <Link href="/vendor">&larr; Back to dashboard</Link>
       </p>
@@ -140,15 +145,21 @@ export default async function VendorModePage({ searchParams }: { searchParams: {
               <form
                 action={recordOfflineSale}
                 key={v.id}
-                style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}
+                style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}
               >
                 <input type="hidden" name="artistId" value={artist.id} />
                 <input type="hidden" name="productId" value={product.id} />
                 <input type="hidden" name="variantId" value={v.id} />
-                <span style={{ fontSize: 13, flex: 1 }}>
+                <span style={{ fontSize: 13, flex: "1 1 160px" }}>
                   {v.label} — Rs. {v.price.toLocaleString("en-US")} — {v.stock} in stock
                 </span>
                 <input type="number" name="quantity" defaultValue={1} min={1} style={{ width: 56, padding: 4 }} />
+                <input
+                  type="text"
+                  name="notes"
+                  placeholder="Note (optional)"
+                  style={{ width: 140, padding: 4, fontSize: 12 }}
+                />
                 <button type="submit" style={{ padding: "4px 10px", fontSize: 13 }} disabled={v.stock <= 0}>
                   {v.stock <= 0 ? "Sold out" : "Sold"}
                 </button>
@@ -158,20 +169,8 @@ export default async function VendorModePage({ searchParams }: { searchParams: {
         ))}
       </section>
 
-      <section style={card}>
-        <h2 style={{ fontSize: 18, marginBottom: 12 }}>Today's sales</h2>
-        <p style={{ fontSize: 13, color: "#666", marginBottom: 12 }}>
-          {todaySales.length} sale{todaySales.length === 1 ? "" : "s"} · Rs. {todayTotal.toLocaleString("en-US")}
-        </p>
-        {todaySales.length === 0 && <p style={{ fontSize: 13, color: "#999" }}>Nothing logged yet today.</p>}
-        {todaySales.map((s) => (
-          <p key={s.id} style={{ fontSize: 13, margin: "4px 0" }}>
-            {s.products?.name ?? "(deleted product)"} — {s.product_variants?.label ?? "-"} &times; {s.quantity} — Rs.{" "}
-            {(s.unit_price * s.quantity).toLocaleString("en-US")}
-            <span style={{ color: "#999" }}> · {new Date(s.sold_at).toLocaleTimeString()}</span>
-          </p>
-        ))}
-      </section>
-    </div>
+      <EndOfDayPanel sales={todaySales} total={todayTotal} />
+      </div>
+    </>
   );
 }

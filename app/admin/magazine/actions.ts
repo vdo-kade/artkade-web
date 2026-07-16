@@ -30,8 +30,13 @@ async function uploadMagazineHero(
 }
 
 export async function createPost(formData: FormData) {
+  // A non-admin session here almost always means the auth session died
+  // server-side (expired/rotated refresh token) rather than a real
+  // authorization denial -- silently no-opping left the form looking
+  // "unresponsive" with zero feedback. Bounce to login so a fresh
+  // sign-in restores a working session immediately.
   const session = await getSessionRole();
-  if (session?.role !== "admin") return;
+  if (session?.role !== "admin") redirect("/admin/login");
 
   const title = formData.get("title");
   const excerpt = formData.get("excerpt");
@@ -81,8 +86,13 @@ export async function createPost(formData: FormData) {
 }
 
 export async function updatePost(formData: FormData) {
+  // A non-admin session here almost always means the auth session died
+  // server-side (expired/rotated refresh token) rather than a real
+  // authorization denial -- silently no-opping left the form looking
+  // "unresponsive" with zero feedback. Bounce to login so a fresh
+  // sign-in restores a working session immediately.
   const session = await getSessionRole();
-  if (session?.role !== "admin") return;
+  if (session?.role !== "admin") redirect("/admin/login");
 
   const id = formData.get("id");
   const title = formData.get("title");
@@ -132,8 +142,13 @@ export async function updatePost(formData: FormData) {
 }
 
 export async function deletePost(formData: FormData) {
+  // A non-admin session here almost always means the auth session died
+  // server-side (expired/rotated refresh token) rather than a real
+  // authorization denial -- silently no-opping left the form looking
+  // "unresponsive" with zero feedback. Bounce to login so a fresh
+  // sign-in restores a working session immediately.
   const session = await getSessionRole();
-  if (session?.role !== "admin") return;
+  if (session?.role !== "admin") redirect("/admin/login");
 
   const id = formData.get("id");
   if (typeof id !== "string") return;

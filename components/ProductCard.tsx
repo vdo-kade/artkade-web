@@ -39,7 +39,7 @@ export default function ProductCard({ product }: { product: Product }) {
       )}
       {product.isOneOff && (
         <span className="absolute -top-2 right-3 bg-accent text-white text-[10px] font-mono uppercase tracking-wide px-2 py-1">
-          One-off
+          1 of 1
         </span>
       )}
 
@@ -62,8 +62,10 @@ export default function ProductCard({ product }: { product: Product }) {
         <div className="flex items-center justify-between mt-2 text-sm">
           <span className="font-mono">{product.priceLabel}</span>
           {soldOut ? (
-            <span className="font-mono text-xs uppercase text-warm-grey">Sold out</span>
-          ) : product.stockRemaining !== undefined && product.stockRemaining <= 10 ? (
+            <span className="font-mono text-xs uppercase text-warm-grey">
+              {product.isOneOff ? "Sold — won't return" : "Sold out"}
+            </span>
+          ) : product.isOneOff ? null : product.stockRemaining !== undefined && product.stockRemaining <= 10 ? (
             <span className="font-mono text-xs text-accent">
               Only {product.stockRemaining} left
             </span>

@@ -21,9 +21,19 @@ export async function createClient() {
           cookiesToSet.forEach(({ name, value, options }) =>
             cookieStore.set(name, value, options)
           );
-        } catch {
-          // Called from a Server Component render; safe to ignore since
-          // this app has no auth session that needs refreshing.
+        } catch (err) {
+          // Next.js only allows cookies() writes from a Server Action or
+          // Route Handler, not a Server Component render -- so this throws
+          // on every plain page render that happens to need a token
+          // refresh. middleware.ts is what actually keeps the session
+          // cookie fresh in that case (it runs first on every /admin/* and
+          // /vendor/* request and can write cookies). This catch exists so
+          // that expected case doesn't crash the render; log it so a
+          // genuine persist failure (e.g. inside a Server Action, where it
+          // should never happen) doesn't go unnoticed and quietly kill the
+          // session -- see app/vendor/actions.ts's redirect-to-login on a
+          // dead session.
+          console.error("Failed to persist refreshed Supabase session cookie:", err);
         }
       },
     },

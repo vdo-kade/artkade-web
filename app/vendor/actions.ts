@@ -16,8 +16,13 @@ import { runPopupLifecycleTick } from "@/lib/popup-expiry";
 // + explicit filters, no RLS).
 
 export async function updateStallDetails(formData: FormData) {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
   const session = await getSessionRole();
-  if (!session) return;
+  if (!session) redirect("/admin/login");
 
   const artistId = formData.get("artistId");
   const name = formData.get("name");
@@ -69,8 +74,13 @@ export async function updateStallDetails(formData: FormData) {
 const PHOTO_FIELDS = ["logo_url", "hero_image_url"] as const;
 
 export async function uploadStallPhoto(formData: FormData) {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
   const session = await getSessionRole();
-  if (!session) return;
+  if (!session) redirect("/admin/login");
 
   const artistId = formData.get("artistId");
   const field = formData.get("field");
@@ -129,14 +139,20 @@ async function uploadProductPhoto(
 }
 
 export async function createProduct(formData: FormData) {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
   const session = await getSessionRole();
-  if (!session) return;
+  if (!session) redirect("/admin/login");
 
   const artistId = formData.get("artistId");
   const name = formData.get("name");
   const description = formData.get("description");
   const category = formData.get("category");
   const file = formData.get("photo");
+  const isOneOff = formData.get("isOneOff") === "on";
   if (typeof artistId !== "string" || typeof name !== "string" || !name.trim()) return;
   if (typeof category !== "string" || !CATEGORY_ORDER.includes(category)) return;
   if (session.role === "vendor" && artistId !== session.artistId) return;
@@ -149,10 +165,14 @@ export async function createProduct(formData: FormData) {
     const packSizeRaw = Number(formData.get(`variantPackSize-${i}`));
     if (typeof label !== "string" || !label.trim()) continue;
     if (!Number.isFinite(price) || price < 0) continue;
+    const rawStock = Number.isFinite(stock) && stock > 0 ? Math.floor(stock) : 0;
     variants.push({
       label: label.trim(),
       price,
-      stock: Number.isFinite(stock) && stock > 0 ? Math.floor(stock) : 0,
+      // A one-of-one item can never have more than 1 unit -- clamped here
+      // server-side (the authoritative check) rather than trusting a max
+      // attribute on the client input, which a submitted form can't bypass.
+      stock: isOneOff ? Math.min(rawStock, 1) : rawStock,
       // Sticker pack variants only -- how many sticker_designs the customer
       // must pick to fill this tier. Ignored/unused for every other
       // category, same as sticker_pack_selection is unused for non-pack
@@ -189,6 +209,7 @@ export async function createProduct(formData: FormData) {
       description: typeof description === "string" && description.trim() ? description.trim() : null,
       category,
       image_url: imageUrl,
+      is_one_off: isOneOff,
       sort_order: count ?? 0,
     })
     .select("id")
@@ -220,14 +241,20 @@ export async function createProduct(formData: FormData) {
 }
 
 export async function updateProduct(formData: FormData) {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
   const session = await getSessionRole();
-  if (!session) return;
+  if (!session) redirect("/admin/login");
 
   const productId = formData.get("productId");
   const name = formData.get("name");
   const description = formData.get("description");
   const category = formData.get("category");
   const isActive = formData.get("isActive") === "on";
+  const isOneOff = formData.get("isOneOff") === "on";
   const file = formData.get("photo");
   if (typeof productId !== "string") return;
   if (typeof name !== "string" || !name.trim()) return;
@@ -261,6 +288,7 @@ export async function updateProduct(formData: FormData) {
       description: typeof description === "string" && description.trim() ? description.trim() : null,
       category,
       is_active: isActive,
+      is_one_off: isOneOff,
       ...(imageUrl ? { image_url: imageUrl } : {}),
     })
     .eq("id", productId);
@@ -276,9 +304,13 @@ export async function updateProduct(formData: FormData) {
       if (!Number.isFinite(price) || price < 0) return null;
       if (!Number.isFinite(stock) || stock < 0) return null;
       const packSize = Number.isFinite(packSizeRaw) && packSizeRaw > 0 ? Math.floor(packSizeRaw) : null;
+      // Same server-side hard cap as createProduct -- a one-of-one item
+      // can never end up with more than 1 unit in stock, regardless of
+      // what was submitted.
+      const clampedStock = isOneOff ? Math.min(Math.floor(stock), 1) : Math.floor(stock);
       return supabase
         .from("product_variants")
-        .update({ label: label.trim(), price, stock: Math.floor(stock), pack_size: packSize })
+        .update({ label: label.trim(), price, stock: clampedStock, pack_size: packSize })
         .eq("id", variantId)
         .eq("product_id", productId);
     })
@@ -289,8 +321,13 @@ export async function updateProduct(formData: FormData) {
 }
 
 export async function deleteProduct(formData: FormData) {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
   const session = await getSessionRole();
-  if (!session) return;
+  if (!session) redirect("/admin/login");
 
   const productId = formData.get("productId");
   if (typeof productId !== "string") return;
@@ -342,8 +379,13 @@ async function uploadStickerDesignPhoto(
 }
 
 export async function createStickerDesign(formData: FormData) {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
   const session = await getSessionRole();
-  if (!session) return;
+  if (!session) redirect("/admin/login");
 
   const artistId = formData.get("artistId");
   const name = formData.get("name");
@@ -377,8 +419,13 @@ export async function createStickerDesign(formData: FormData) {
 }
 
 export async function updateStickerDesign(formData: FormData) {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
   const session = await getSessionRole();
-  if (!session) return;
+  if (!session) redirect("/admin/login");
 
   const id = formData.get("id");
   const name = formData.get("name");
@@ -415,8 +462,13 @@ export async function updateStickerDesign(formData: FormData) {
 }
 
 export async function deleteStickerDesign(formData: FormData) {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
   const session = await getSessionRole();
-  if (!session) return;
+  if (!session) redirect("/admin/login");
 
   const id = formData.get("id");
   if (typeof id !== "string") return;
@@ -433,8 +485,13 @@ export async function deleteStickerDesign(formData: FormData) {
 }
 
 export async function changePassword(formData: FormData) {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
   const session = await getSessionRole();
-  if (!session) return;
+  if (!session) redirect("/admin/login");
 
   const newPassword = formData.get("newPassword");
   const confirmPassword = formData.get("confirmPassword");

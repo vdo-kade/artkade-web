@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase-admin";
 import { createClient as createAuthClient } from "@/lib/supabase-server";
+import AdminNav from "@/components/AdminNav";
 import { approveOrder, rejectOrder } from "./actions";
 import { logout } from "../actions";
 
@@ -171,7 +172,9 @@ export default async function AdminOrdersPage() {
   const reviewed = await withSignedProofs(supabase, reviewedResult.data ?? []);
 
   return (
-    <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 960, margin: "0 auto" }}>
+    <>
+      <AdminNav role="admin" />
+      <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 960, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
         <h1 style={{ fontSize: 24 }}>Orders awaiting review</h1>
         <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "#666" }}>
@@ -292,6 +295,7 @@ export default async function AdminOrdersPage() {
           </div>
         </div>
       ))}
-    </div>
+      </div>
+    </>
   );
 }

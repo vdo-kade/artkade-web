@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getSessionRole } from "@/lib/session-role";
+import AdminNav from "@/components/AdminNav";
 import { createPost, updatePost } from "./actions";
 import DeletePostButton from "./DeletePostButton";
 
@@ -76,7 +77,9 @@ export default async function AdminMagazinePage() {
   const artists = artistsResult.data ?? [];
 
   return (
-    <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 720, margin: "0 auto" }}>
+    <>
+      <AdminNav role="admin" />
+      <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 720, margin: "0 auto" }}>
       <p style={{ marginBottom: 16 }}>
         <Link href="/admin">&larr; Back to dashboard</Link>
       </p>
@@ -166,6 +169,7 @@ export default async function AdminMagazinePage() {
           </div>
         </div>
       ))}
-    </div>
+      </div>
+    </>
   );
 }

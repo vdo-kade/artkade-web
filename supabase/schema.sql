@@ -151,6 +151,7 @@ create table offline_sales (
   variant_id uuid not null references product_variants(id) on delete cascade,
   quantity int not null default 1,
   unit_price numeric(10,2) not null,
+  notes text,             -- optional per-sale note (e.g. "sold at a discount", buyer name)
   sold_at timestamptz not null default now()
 );
 

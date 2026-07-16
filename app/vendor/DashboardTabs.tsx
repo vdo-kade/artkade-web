@@ -2,25 +2,28 @@
 
 import { useState, type ReactNode } from "react";
 
-type TabId = "personal" | "stock" | "account";
+type TabId = "personal" | "stock" | "tracker" | "account";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "personal", label: "Personal info" },
   { id: "stock", label: "Stock" },
+  { id: "tracker", label: "Tracker" },
   { id: "account", label: "Account settings" },
 ];
 
 export default function DashboardTabs({
   personal,
   stock,
+  tracker,
   account,
 }: {
   personal: ReactNode;
   stock: ReactNode;
+  tracker: ReactNode;
   account: ReactNode;
 }) {
   const [active, setActive] = useState<TabId>("personal");
-  const content = { personal, stock, account };
+  const content = { personal, stock, tracker, account };
 
   return (
     <div>

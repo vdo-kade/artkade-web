@@ -82,7 +82,7 @@ function BankTransferDetails() {
 }
 
 export default function CheckoutPage() {
-  const { items, totalAmount, clear } = useBag();
+  const { items, totalAmount, clear, removeItem } = useBag();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -230,9 +230,9 @@ export default function CheckoutPage() {
                 {items.map((item) => (
                   <li
                     key={bagItemKey(item)}
-                    className="flex items-center justify-between p-3 text-sm"
+                    className="flex items-center justify-between gap-3 p-3 text-sm"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-medium">{item.productName}</p>
                       <p className="text-warm-grey text-xs">
                         {item.variantLabel} × {item.quantity}
@@ -243,9 +243,19 @@ export default function CheckoutPage() {
                         </p>
                       )}
                     </div>
-                    <span className="font-mono">
-                      Rs. {(item.unitPrice * item.quantity).toLocaleString("en-US")}
-                    </span>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-mono">
+                        Rs. {(item.unitPrice * item.quantity).toLocaleString("en-US")}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeItem(bagItemKey(item))}
+                        aria-label={`Remove ${item.productName} from bag`}
+                        className="text-warm-grey hover:text-red-600 transition-colors text-xs underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>

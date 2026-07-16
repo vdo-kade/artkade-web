@@ -7,6 +7,7 @@ import { logout } from "./actions";
 import { extendPopup, reactivateStall, checkExpiryNow } from "./dashboard-actions";
 import ConvertToPermanentButton from "./ConvertToPermanentButton";
 import Countdown from "@/components/Countdown";
+import AdminNav from "@/components/AdminNav";
 
 export const revalidate = 0;
 
@@ -159,7 +160,9 @@ export default async function GodDashboardPage() {
   const now = new Date();
 
   return (
-    <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 960, margin: "0 auto" }}>
+    <>
+      <AdminNav role="admin" />
+      <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 960, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
         <h1 style={{ fontSize: 24 }}>All stalls</h1>
         <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "#666" }}>
@@ -272,6 +275,7 @@ export default async function GodDashboardPage() {
           </div>
         );
       })}
-    </div>
+      </div>
+    </>
   );
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getSessionRole } from "@/lib/session-role";
 
@@ -10,17 +11,22 @@ import { getSessionRole } from "@/lib/session-role";
 // deliberately doesn't touch stock at all today; this auto-decrement is
 // specific to Vendor Mode, not a change to that existing behavior.
 export async function recordOfflineSale(formData: FormData) {
+  // See app/admin/magazine/actions.ts for why this redirects instead of
+  // silently no-opping: a dead session should bounce to login, not look
+  // like a broken button.
   const session = await getSessionRole();
-  if (!session) return;
+  if (!session) redirect("/admin/login");
 
   const artistId = formData.get("artistId");
   const productId = formData.get("productId");
   const variantId = formData.get("variantId");
   const quantityRaw = formData.get("quantity");
+  const notesRaw = formData.get("notes");
   if (typeof artistId !== "string" || typeof productId !== "string" || typeof variantId !== "string") return;
   if (session.role === "vendor" && artistId !== session.artistId) return;
 
-  const quantity = Math.max(1, Math.floor(Number(quantityRaw) || 1));
+  const requestedQuantity = Math.max(1, Math.floor(Number(quantityRaw) || 1));
+  const notes = typeof notesRaw === "string" && notesRaw.trim() ? notesRaw.trim() : null;
 
   const supabase = createAdminClient();
 
@@ -33,6 +39,13 @@ export async function recordOfflineSale(formData: FormData) {
     .eq("product_id", productId)
     .maybeSingle<{ id: string; price: number; stock: number; product_id: string; products: { artist_id: string } }>();
   if (!variant || variant.products.artist_id !== artistId) return;
+  if (variant.stock <= 0) return;
+
+  // Never sell more than is actually left -- matters most for a one-of-one
+  // item (stock hard-capped at 1 elsewhere), but applies to every product:
+  // the "Sold" button reflects stock at page-load time, so a stale tab or a
+  // typed-in quantity can't oversell past what's really available.
+  const quantity = Math.min(requestedQuantity, variant.stock);
 
   const { error: insertError } = await supabase.from("offline_sales").insert({
     artist_id: artistId,
@@ -40,6 +53,7 @@ export async function recordOfflineSale(formData: FormData) {
     variant_id: variantId,
     quantity,
     unit_price: variant.price,
+    notes,
   });
   if (insertError) {
     console.error("Failed to record offline sale:", insertError);

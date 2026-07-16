@@ -19,6 +19,7 @@ import DeleteStickerDesignButton from "./DeleteStickerDesignButton";
 import PasswordChangeForm from "./PasswordChangeForm";
 import NewProductToast from "./NewProductToast";
 import DashboardTabs from "./DashboardTabs";
+import AdminNav from "@/components/AdminNav";
 
 export const revalidate = 0;
 
@@ -65,6 +66,45 @@ type CollaboratorStall = {
   products: CollaboratorProductRow[];
   pendingOrders: number;
 };
+
+type OfflineSaleRow = {
+  id: string;
+  quantity: number;
+  unit_price: number;
+  sold_at: string;
+  products: { name: string } | null;
+  product_variants: { label: string } | null;
+};
+
+type TrackerOrderItemRow = {
+  order_id: string;
+  quantity: number;
+  products: { name: string } | null;
+  orders: {
+    id: string;
+    order_number: string;
+    customer_name: string;
+    customer_phone: string;
+    shipping_address: string;
+    status: string;
+    total_amount: number;
+    created_at: string;
+  };
+};
+
+type TrackerOrder = {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  customerPhone: string;
+  shippingAddress: string;
+  status: string;
+  totalAmount: number;
+  createdAt: string;
+  itemNames: string[];
+};
+
+const PROCESSED_STATUSES = new Set(["approved", "shipped", "delivered"]);
 
 const inputStyle: React.CSSProperties = {
   display: "block",
@@ -187,6 +227,69 @@ export default async function VendorDashboardPage({
     return <VendorDashboardError />;
   }
 
+  // Tracker tab data: this stall's offline (Vendor Mode) sales log/analytics,
+  // and every online order that contains at least one of this stall's
+  // products (an order can span multiple stalls -- total_amount below is
+  // the whole order's total, not just this stall's share of it).
+  const [offlineSalesResult, orderItemsResult] = await Promise.all([
+    supabase
+      .from("offline_sales")
+      .select("id, quantity, unit_price, sold_at, products(name), product_variants(label)")
+      .eq("artist_id", selectedArtistId)
+      .order("sold_at", { ascending: false })
+      .limit(500)
+      .returns<OfflineSaleRow[]>(),
+    supabase
+      .from("order_items")
+      .select(
+        "order_id, quantity, products!inner(name, artist_id), orders!inner(id, order_number, customer_name, customer_phone, shipping_address, status, total_amount, created_at)"
+      )
+      .eq("products.artist_id", selectedArtistId)
+      .returns<TrackerOrderItemRow[]>(),
+  ]);
+
+  const offlineSales = offlineSalesResult.data ?? [];
+  const offlineSalesByDate = new Map<string, { count: number; total: number }>();
+  for (const sale of offlineSales) {
+    const date = sale.sold_at.slice(0, 10);
+    const bucket = offlineSalesByDate.get(date) ?? { count: 0, total: 0 };
+    bucket.count += sale.quantity;
+    bucket.total += sale.quantity * sale.unit_price;
+    offlineSalesByDate.set(date, bucket);
+  }
+  const salesByDate = Array.from(offlineSalesByDate.entries())
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    .slice(0, 30);
+
+  const trackerOrdersById = new Map<string, TrackerOrder>();
+  for (const row of orderItemsResult.data ?? []) {
+    const o = row.orders;
+    const existing = trackerOrdersById.get(o.id);
+    if (existing) {
+      if (row.products?.name) existing.itemNames.push(row.products.name);
+    } else {
+      trackerOrdersById.set(o.id, {
+        id: o.id,
+        orderNumber: o.order_number,
+        customerName: o.customer_name,
+        customerPhone: o.customer_phone,
+        shippingAddress: o.shipping_address,
+        status: o.status,
+        totalAmount: o.total_amount,
+        createdAt: o.created_at,
+        itemNames: row.products?.name ? [row.products.name] : [],
+      });
+    }
+  }
+  const trackerOrders = Array.from(trackerOrdersById.values()).sort((a, b) =>
+    a.createdAt < b.createdAt ? 1 : -1
+  );
+  const pendingTrackerOrders = trackerOrders.filter((o) => o.status === "awaiting_review");
+  const processedTrackerOrders = trackerOrders.filter((o) => PROCESSED_STATUSES.has(o.status));
+  const otherTrackerOrders = trackerOrders.filter(
+    (o) => o.status !== "awaiting_review" && !PROCESSED_STATUSES.has(o.status)
+  );
+
   // Read-only visibility into a collab stall (e.g. Shilpa Kade has no login
   // of its own -- Nuwan sees it here instead of getting a second account).
   // Admin doesn't need this: they already see every stall via the stall
@@ -244,7 +347,9 @@ export default async function VendorDashboardPage({
   }
 
   return (
-    <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 720, margin: "0 auto" }}>
+    <>
+      <AdminNav role={session.role} />
+      <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 720, margin: "0 auto" }}>
       {searchParams.created && <NewProductToast createdId={searchParams.created} />}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
         <h1 style={{ fontSize: 24 }}>{artist.name} — stall dashboard</h1>
@@ -344,6 +449,62 @@ export default async function VendorDashboardPage({
         stock={
           <>
       <section style={card}>
+        <h2 style={{ fontSize: 18, marginBottom: 12 }}>
+          Sticker designs <span style={{ fontSize: 12, color: "#666", fontWeight: "normal" }}>({activeDesignCount} active)</span>
+        </h2>
+        <p style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>
+          Individual designs customers pick from to build a sticker pack. Make sure you have at
+          least as many active designs as any sticker pack variant's "Designs per pack" below.
+        </p>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+          {stickerDesigns.map((design) => (
+            <div key={design.id} style={{ width: 140 }}>
+              {design.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={design.image_url}
+                  alt={design.name}
+                  style={{ width: 140, height: 140, objectFit: "cover", border: "1px solid #ccc" }}
+                />
+              ) : (
+                <div style={{ width: 140, height: 140, border: "1px solid #ccc", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#999" }}>
+                  No photo
+                </div>
+              )}
+              <form action={updateStickerDesign} style={{ marginTop: 4 }}>
+                <input type="hidden" name="id" value={design.id} />
+                <input style={{ width: "100%", padding: 4, fontSize: 12, marginBottom: 4, boxSizing: "border-box" }} name="name" defaultValue={design.name} required />
+                <input style={{ fontSize: 11, marginBottom: 4, width: "100%" }} type="file" name="photo" accept="image/*" />
+                <label style={{ fontSize: 11, color: "#666", display: "block", marginBottom: 4 }}>
+                  <input type="checkbox" name="isActive" defaultChecked={design.is_active} /> Active
+                </label>
+                <button type="submit" style={{ padding: "3px 8px", fontSize: 12, marginBottom: 4 }}>
+                  Save
+                </button>
+              </form>
+              <DeleteStickerDesignButton id={design.id} name={design.name} />
+            </div>
+          ))}
+        </div>
+
+        <form action={createStickerDesign} style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <input type="hidden" name="artistId" value={artist.id} />
+          <div>
+            <label style={{ fontSize: 12, color: "#666", display: "block" }}>Name</label>
+            <input style={{ padding: 6, fontSize: 13 }} name="name" required />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, color: "#666", display: "block" }}>Photo</label>
+            <input style={{ fontSize: 12 }} type="file" name="photo" accept="image/*" />
+          </div>
+          <button type="submit" style={{ padding: "6px 14px" }}>
+            Add design
+          </button>
+        </form>
+      </section>
+
+      <section style={card}>
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>Add a product</h2>
         <form action={createProduct}>
           <input type="hidden" name="artistId" value={artist.id} />
@@ -361,6 +522,13 @@ export default async function VendorDashboardPage({
           </select>
           <label style={{ fontSize: 12, color: "#666" }}>Photo</label>
           <input style={{ marginBottom: 12, fontSize: 12 }} type="file" name="photo" accept="image/*" />
+
+          <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
+            <input type="checkbox" name="isOneOff" /> One of one — only 1 unit exists ever
+          </label>
+          <p style={{ fontSize: 12, color: "#999", marginBottom: 6 }}>
+            Stock will be capped at 1 no matter what you enter below, and it won't restock once sold.
+          </p>
 
           <p style={{ fontSize: 13, marginBottom: 6 }}>Variants (label, price, stock) — fill in at least one</p>
           <p style={{ fontSize: 12, color: "#999", marginBottom: 6 }}>
@@ -425,6 +593,15 @@ export default async function VendorDashboardPage({
                 <input type="checkbox" name="isActive" defaultChecked={product.is_active} /> Active
                 (visible on the stall)
               </label>
+              <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
+                <input type="checkbox" name="isOneOff" defaultChecked={product.is_one_off} /> One of one — only 1
+                unit exists ever
+              </label>
+              {product.is_one_off && (
+                <p style={{ fontSize: 12, color: "#999", marginBottom: 6 }}>
+                  Stock is capped at 1 below and won't restock once sold.
+                </p>
+              )}
 
               {product.product_variants.map((variant) => (
                 <div key={variant.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -447,8 +624,9 @@ export default async function VendorDashboardPage({
                   <input
                     type="number"
                     min={0}
+                    max={product.is_one_off ? 1 : undefined}
                     name={`variantStock-${variant.id}`}
-                    defaultValue={variant.stock}
+                    defaultValue={product.is_one_off ? Math.min(variant.stock, 1) : variant.stock}
                     style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
                   />
                   <label style={{ fontSize: 12, color: "#666" }}>Designs/pack</label>
@@ -470,62 +648,6 @@ export default async function VendorDashboardPage({
             </div>
           </div>
         ))}
-      </section>
-
-      <section style={card}>
-        <h2 style={{ fontSize: 18, marginBottom: 12 }}>
-          Sticker designs <span style={{ fontSize: 12, color: "#666", fontWeight: "normal" }}>({activeDesignCount} active)</span>
-        </h2>
-        <p style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>
-          Individual designs customers pick from to build a sticker pack. Make sure you have at
-          least as many active designs as any sticker pack variant's "Designs per pack" above.
-        </p>
-
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-          {stickerDesigns.map((design) => (
-            <div key={design.id} style={{ width: 140 }}>
-              {design.image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={design.image_url}
-                  alt={design.name}
-                  style={{ width: 140, height: 140, objectFit: "cover", border: "1px solid #ccc" }}
-                />
-              ) : (
-                <div style={{ width: 140, height: 140, border: "1px solid #ccc", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#999" }}>
-                  No photo
-                </div>
-              )}
-              <form action={updateStickerDesign} style={{ marginTop: 4 }}>
-                <input type="hidden" name="id" value={design.id} />
-                <input style={{ width: "100%", padding: 4, fontSize: 12, marginBottom: 4, boxSizing: "border-box" }} name="name" defaultValue={design.name} required />
-                <input style={{ fontSize: 11, marginBottom: 4, width: "100%" }} type="file" name="photo" accept="image/*" />
-                <label style={{ fontSize: 11, color: "#666", display: "block", marginBottom: 4 }}>
-                  <input type="checkbox" name="isActive" defaultChecked={design.is_active} /> Active
-                </label>
-                <button type="submit" style={{ padding: "3px 8px", fontSize: 12, marginBottom: 4 }}>
-                  Save
-                </button>
-              </form>
-              <DeleteStickerDesignButton id={design.id} name={design.name} />
-            </div>
-          ))}
-        </div>
-
-        <form action={createStickerDesign} style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
-          <input type="hidden" name="artistId" value={artist.id} />
-          <div>
-            <label style={{ fontSize: 12, color: "#666", display: "block" }}>Name</label>
-            <input style={{ padding: 6, fontSize: 13 }} name="name" required />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, color: "#666", display: "block" }}>Photo</label>
-            <input style={{ fontSize: 12 }} type="file" name="photo" accept="image/*" />
-          </div>
-          <button type="submit" style={{ padding: "6px 14px" }}>
-            Add design
-          </button>
-        </form>
       </section>
 
       {collaboratorStalls.map((stall) => (
@@ -555,6 +677,90 @@ export default async function VendorDashboardPage({
       ))}
           </>
         }
+        tracker={
+          <>
+            <section style={card}>
+              <h2 style={{ fontSize: 18, marginBottom: 12 }}>Sales by date</h2>
+              {salesByDate.length === 0 ? (
+                <p style={{ fontSize: 13, color: "#999" }}>No Vendor Mode sales logged yet.</p>
+              ) : (
+                <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", color: "#666", borderBottom: "1px solid #eee" }}>
+                      <th style={{ padding: "4px 0", fontWeight: "normal" }}>Date</th>
+                      <th style={{ padding: "4px 0", fontWeight: "normal" }}>Items sold</th>
+                      <th style={{ padding: "4px 0", fontWeight: "normal" }}>Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesByDate.map(([date, bucket]) => (
+                      <tr key={date} style={{ borderBottom: "1px solid #f5f5f5" }}>
+                        <td style={{ padding: "4px 0" }}>{date}</td>
+                        <td style={{ padding: "4px 0" }}>{bucket.count}</td>
+                        <td style={{ padding: "4px 0" }}>Rs. {bucket.total.toLocaleString("en-US")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+
+            <section style={card}>
+              <h2 style={{ fontSize: 18, marginBottom: 12 }}>Offline sales log</h2>
+              <p style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>
+                Every in-person sale logged from Vendor Mode, most recent first.
+              </p>
+              {offlineSales.length === 0 ? (
+                <p style={{ fontSize: 13, color: "#999" }}>Nothing logged yet.</p>
+              ) : (
+                <div style={{ maxHeight: 320, overflowY: "auto" }}>
+                  {offlineSales.map((s) => (
+                    <p key={s.id} style={{ fontSize: 13, margin: "4px 0" }}>
+                      {s.products?.name ?? "(deleted product)"} — {s.product_variants?.label ?? "-"} &times; {s.quantity} — Rs.{" "}
+                      {(s.unit_price * s.quantity).toLocaleString("en-US")}
+                      <span style={{ color: "#999" }}>
+                        {" "}
+                        · {new Date(s.sold_at).toLocaleDateString()} {new Date(s.sold_at).toLocaleTimeString()}
+                      </span>
+                    </p>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section style={card}>
+              <h2 style={{ fontSize: 18, marginBottom: 4 }}>
+                Orders — pending <span style={{ fontSize: 12, color: "#666", fontWeight: "normal" }}>({pendingTrackerOrders.length})</span>
+              </h2>
+              <p style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>
+                Online orders containing this stall's products, awaiting review.
+              </p>
+              {pendingTrackerOrders.length === 0 && <p style={{ fontSize: 13, color: "#999" }}>None right now.</p>}
+              {pendingTrackerOrders.map((o) => (
+                <TrackerOrderRow key={o.id} order={o} />
+              ))}
+            </section>
+
+            <section style={card}>
+              <h2 style={{ fontSize: 18, marginBottom: 4 }}>
+                Orders — processed <span style={{ fontSize: 12, color: "#666", fontWeight: "normal" }}>({processedTrackerOrders.length})</span>
+              </h2>
+              <p style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>Approved, shipped, or delivered.</p>
+              {processedTrackerOrders.length === 0 && <p style={{ fontSize: 13, color: "#999" }}>None yet.</p>}
+              {processedTrackerOrders.map((o) => (
+                <TrackerOrderRow key={o.id} order={o} />
+              ))}
+              {otherTrackerOrders.length > 0 && (
+                <>
+                  <h3 style={{ fontSize: 13, color: "#666", margin: "16px 0 8px" }}>Rejected / cancelled / out of stock</h3>
+                  {otherTrackerOrders.map((o) => (
+                    <TrackerOrderRow key={o.id} order={o} />
+                  ))}
+                </>
+              )}
+            </section>
+          </>
+        }
         account={
           <section style={card}>
             <h2 style={{ fontSize: 18, marginBottom: 12 }}>Account</h2>
@@ -562,7 +768,8 @@ export default async function VendorDashboardPage({
           </section>
         }
       />
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -598,6 +805,42 @@ function PhotoUploader({
           Upload
         </button>
       </form>
+    </div>
+  );
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  awaiting_review: "Awaiting review",
+  approved: "Approved",
+  rejected: "Rejected",
+  out_of_stock: "Out of stock",
+  shipped: "Shipped",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
+
+function TrackerOrderRow({ order }: { order: TrackerOrder }) {
+  return (
+    <div style={{ borderTop: "1px solid #eee", paddingTop: 8, marginTop: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <strong style={{ fontSize: 13 }}>{order.orderNumber}</strong>
+        <span style={{ fontSize: 12, color: "#666" }}>{STATUS_LABELS[order.status] ?? order.status}</span>
+      </div>
+      <p style={{ fontSize: 13, margin: "2px 0" }}>{order.customerName}</p>
+      <p style={{ fontSize: 12, color: "#666", margin: "2px 0" }}>{order.itemNames.join(", ")}</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+        <span style={{ fontSize: 12, color: "#999" }}>
+          {new Date(order.createdAt).toLocaleDateString()} · order total Rs. {order.totalAmount.toLocaleString("en-US")}
+        </span>
+        <a
+          href={`/vendor/label/${order.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ fontSize: 12 }}
+        >
+          Shipping label &rarr;
+        </a>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getSessionRole } from "@/lib/session-role";
 import { runPopupLifecycleTick } from "@/lib/popup-expiry";
@@ -10,8 +11,11 @@ import { runPopupLifecycleTick } from "@/lib/popup-expiry";
 // their session first, same house rule as every other action in this app.
 
 export async function extendPopup(formData: FormData) {
+  // See app/admin/magazine/actions.ts for why this redirects instead of
+  // silently no-opping: a dead session should bounce to login, not look
+  // like a broken button.
   const session = await getSessionRole();
-  if (session?.role !== "admin") return;
+  if (session?.role !== "admin") redirect("/admin/login");
 
   const artistId = formData.get("artistId");
   const newPopupEndsAtRaw = formData.get("newPopupEndsAt");
@@ -29,8 +33,11 @@ export async function extendPopup(formData: FormData) {
 }
 
 export async function convertToPermanent(formData: FormData) {
+  // See app/admin/magazine/actions.ts for why this redirects instead of
+  // silently no-opping: a dead session should bounce to login, not look
+  // like a broken button.
   const session = await getSessionRole();
-  if (session?.role !== "admin") return;
+  if (session?.role !== "admin") redirect("/admin/login");
 
   const artistId = formData.get("artistId");
   if (typeof artistId !== "string") return;
@@ -50,8 +57,11 @@ export async function convertToPermanent(formData: FormData) {
 }
 
 export async function reactivateStall(formData: FormData) {
+  // See app/admin/magazine/actions.ts for why this redirects instead of
+  // silently no-opping: a dead session should bounce to login, not look
+  // like a broken button.
   const session = await getSessionRole();
-  if (session?.role !== "admin") return;
+  if (session?.role !== "admin") redirect("/admin/login");
 
   const artistId = formData.get("artistId");
   if (typeof artistId !== "string") return;
@@ -64,8 +74,11 @@ export async function reactivateStall(formData: FormData) {
 }
 
 export async function checkExpiryNow() {
+  // See app/admin/magazine/actions.ts for why this redirects instead of
+  // silently no-opping: a dead session should bounce to login, not look
+  // like a broken button.
   const session = await getSessionRole();
-  if (session?.role !== "admin") return;
+  if (session?.role !== "admin") redirect("/admin/login");
 
   await runPopupLifecycleTick(createAdminClient());
 

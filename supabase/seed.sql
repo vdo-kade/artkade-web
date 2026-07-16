@@ -97,24 +97,6 @@ join (values
 ) as x(label, price, stock) on true
 where p.category = 'print';
 
--- Sticker designs (individual designs for the build-your-own-pack picker) --
--- the nine new ones only; the original seven aren't split out as pack
--- designs yet.
-with v as (select id from artists where slug = 'vdokade')
-insert into sticker_designs (artist_id, name, image_url, sort_order)
-select v.id, x.name, x.image_url, x.sort_order
-from v, (values
-  ('Computer Cop', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/cop-computer.png', 1),
-  ('Cop Hands Up', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/cop-hand-up.png', 2),
-  ('Dad Standing', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/dad-standing.png', 3),
-  ('Prema Waving', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/prema-waving.png', 4),
-  ('Sir In The Office Chair', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/sir-office-chair.png', 5),
-  ('Susie Carries Prema', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/susie-carries-prema.png', 6),
-  ('Susie Skydiver', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/susie-skydiver.png', 7),
-  ('Baby', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/baby.png', 8),
-  ('Balla', 'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/balla.png', 9)
-) as x(name, image_url, sort_order);
-
 -- Bank transfer details -- placeholder only. Only inserted if the table is
 -- currently empty, so re-running this file later (e.g. to reseed products)
 -- never overwrites the real values once they've been set via the Supabase

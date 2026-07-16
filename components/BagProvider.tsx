@@ -2,8 +2,6 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
-export type StickerSelection = { id: string; name: string };
-
 export type BagItem = {
   productId: string;
   variantId: string;
@@ -12,17 +10,12 @@ export type BagItem = {
   unitPrice: number;
   quantity: number;
   imageUrl?: string;
-  stickerSelection?: StickerSelection[];
 };
 
-// Cart-line identity: normally just the variant, but a build-your-own
-// sticker pack needs two different custom packs of the SAME variant to be
-// separate lines (they contain different designs), while re-adding the
-// identical selection should still merge quantity like any other item.
-export function bagItemKey(item: Pick<BagItem, "variantId" | "stickerSelection">): string {
-  if (!item.stickerSelection || item.stickerSelection.length === 0) return item.variantId;
-  const sortedIds = item.stickerSelection.map((d) => d.id).sort().join(",");
-  return `${item.variantId}::${sortedIds}`;
+// Cart-line identity: each variant is its own line; re-adding the same
+// variant merges quantity like any other item.
+export function bagItemKey(item: Pick<BagItem, "variantId">): string {
+  return item.variantId;
 }
 
 type BagContextValue = {

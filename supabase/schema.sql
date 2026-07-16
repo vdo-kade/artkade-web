@@ -1,8 +1,8 @@
 -- ============================================================
 -- ART KADE — Core database schema
 -- Run this in the Supabase dashboard: SQL Editor -> New query -> paste -> Run
--- This covers the core of the PRD (stalls, products, sticker-pack builder,
--- order + approval flow, popup stalls, magazine). Payments/shipping-rules
+-- This covers the core of the PRD (stalls, products, order + approval flow,
+-- popup stalls, magazine). Payments/shipping-rules
 -- tables, analytics, and customer accounts are intentionally left for a
 -- later pass once the core flow is working end to end.
 -- ============================================================
@@ -62,30 +62,17 @@ create table products (
   created_at timestamptz not null default now()
 );
 
--- Variants cover sizes (A6/A5/A4/A3 prints, S/M/L tees) and sticker PACK
--- SIZES (4/6/10). Each variant carries its own stock and price.
+-- Variants cover sizes (A6/A5/A4/A3 prints, S/M/L tees) and sticker sizes
+-- (Small/Medium/Large). Each sticker design is its own product -- there is
+-- no bundle/pack concept: a customer buys one design at a time at its size
+-- tier's price. Each variant carries its own stock and price.
 create table product_variants (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references products(id) on delete cascade,
-  label text not null,          -- e.g. 'A5', 'Medium', '6-pack'
+  label text not null,          -- e.g. 'A5', 'Medium'
   price numeric(10,2) not null,
   stock int not null default 0, -- null/omit stock tracking for digital & freebies
-  is_active boolean not null default true,
-  pack_size int                 -- sticker_pack variants only: how many
-                                 -- individual sticker_designs the customer
-                                 -- must pick to fill this tier (e.g. 4/6/10)
-);
-
--- Individual sticker designs an artist has, used to build a custom pack
--- (independent of "products" -- a pack is a product; these are the designs
--- a customer picks from to fill that pack).
-create table sticker_designs (
-  id uuid primary key default gen_random_uuid(),
-  artist_id uuid not null references artists(id) on delete cascade,
-  name text not null,
-  image_url text,
-  is_active boolean not null default true,
-  sort_order int not null default 0
+  is_active boolean not null default true
 );
 
 -- ---------- ORDERS ----------
@@ -121,13 +108,6 @@ create table order_items (
   order_id uuid not null references orders(id) on delete cascade,
   product_id uuid not null references products(id),
   variant_id uuid references product_variants(id),
-  -- for a build-your-own sticker pack: {id, name} for each design chosen,
-  -- e.g. '[{"id":"<uuid>","name":"Baby"}, ...]' for a 4-pack. Denormalized
-  -- (name copied at order time, not joined live) for the same reason
-  -- unit_price is a snapshot: sticker_designs has no FK from order_items,
-  -- so a design deleted later would otherwise blank out what staff need to
-  -- know when physically packing the order.
-  sticker_pack_selection jsonb,
   quantity int not null default 1,
   unit_price numeric(10,2) not null
 );
@@ -199,7 +179,6 @@ create table magazine_posts (
 alter table artists enable row level security;
 alter table products enable row level security;
 alter table product_variants enable row level security;
-alter table sticker_designs enable row level security;
 alter table magazine_posts enable row level security;
 alter table orders enable row level security;
 alter table order_items enable row level security;
@@ -214,9 +193,6 @@ create policy "public can read active products" on products
   for select using (is_active);
 
 create policy "public can read active variants" on product_variants
-  for select using (is_active);
-
-create policy "public can read active sticker designs" on sticker_designs
   for select using (is_active);
 
 create policy "public can read published magazine posts" on magazine_posts

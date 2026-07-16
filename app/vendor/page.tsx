@@ -5,17 +5,8 @@ import { getCachedUser } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import { logout } from "@/app/admin/actions";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/catalogue";
-import {
-  updateStallDetails,
-  uploadStallPhoto,
-  createProduct,
-  updateProduct,
-  createStickerDesign,
-  updateStickerDesign,
-  deleteStickerDesign,
-} from "./actions";
+import { updateStallDetails, uploadStallPhoto, createProduct, updateProduct } from "./actions";
 import DeleteProductButton from "./DeleteProductButton";
-import DeleteStickerDesignButton from "./DeleteStickerDesignButton";
 import PasswordChangeForm from "./PasswordChangeForm";
 import NewProductToast from "./NewProductToast";
 import DashboardTabs from "./DashboardTabs";
@@ -37,7 +28,7 @@ type ArtistRow = {
   popup_ends_at: string | null;
 };
 
-type VariantRow = { id: string; label: string; price: number; stock: number; pack_size: number | null };
+type VariantRow = { id: string; label: string; price: number; stock: number };
 type ProductRow = {
   id: string;
   category: string;
@@ -57,7 +48,6 @@ type CollaboratorProductRow = {
   category: string;
   product_variants: { label: string; stock: number }[];
 };
-type StickerDesignRow = { id: string; name: string; image_url: string | null; is_active: boolean };
 type CollaboratorOrderRow = { id: string; order_items: { product_id: string }[] };
 type CollaboratorStall = {
   id: string;
@@ -195,7 +185,7 @@ export default async function VendorDashboardPage({
     selectedArtistId = session.artistId;
   }
 
-  const [artistResult, productsResult, stickerDesignsResult] = await Promise.all([
+  const [artistResult, productsResult] = await Promise.all([
     supabase
       .from("artists")
       .select("id, slug, name, tagline, bio, logo_url, hero_image_url, is_popup, popup_starts_at, popup_ends_at")
@@ -204,17 +194,11 @@ export default async function VendorDashboardPage({
     supabase
       .from("products")
       .select(
-        "id, category, name, description, image_url, is_active, is_one_off, sold_count, product_variants(id, label, price, stock, pack_size)"
+        "id, category, name, description, image_url, is_active, is_one_off, sold_count, product_variants(id, label, price, stock)"
       )
       .eq("artist_id", selectedArtistId)
       .order("sort_order")
       .returns<ProductRow[]>(),
-    supabase
-      .from("sticker_designs")
-      .select("id, name, image_url, is_active")
-      .eq("artist_id", selectedArtistId)
-      .order("sort_order")
-      .returns<StickerDesignRow[]>(),
   ]);
 
   if (artistResult.error) {
@@ -223,10 +207,6 @@ export default async function VendorDashboardPage({
   }
   if (productsResult.error) {
     console.error("Failed to load products:", productsResult.error);
-    return <VendorDashboardError />;
-  }
-  if (stickerDesignsResult.error) {
-    console.error("Failed to load sticker designs:", stickerDesignsResult.error);
     return <VendorDashboardError />;
   }
 
@@ -342,8 +322,6 @@ export default async function VendorDashboardPage({
 
   const artist = artistResult.data;
   const products = productsResult.data;
-  const stickerDesigns = stickerDesignsResult.data ?? [];
-  const activeDesignCount = stickerDesigns.filter((d) => d.is_active).length;
 
   if (!artist) {
     return <div style={{ padding: 24, fontFamily: "sans-serif" }}>Stall not found.</div>;
@@ -452,66 +430,6 @@ export default async function VendorDashboardPage({
         stock={
           <>
       <section style={card}>
-        <h2 style={{ fontSize: 18, marginBottom: 12 }}>
-          Sticker designs <span style={{ fontSize: 12, color: "#666", fontWeight: "normal" }}>({activeDesignCount} active)</span>
-        </h2>
-        <p style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>
-          Individual designs customers pick from to build a sticker pack. Make sure you have at
-          least as many active designs as any sticker pack variant's "Designs per pack" below.
-        </p>
-
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-          {stickerDesigns.map((design) => (
-            <div key={design.id} style={{ width: 140 }}>
-              {design.image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={design.image_url}
-                  alt={design.name}
-                  style={{ width: 140, height: 140, objectFit: "cover", border: "1px solid #ccc" }}
-                />
-              ) : (
-                <div style={{ width: 140, height: 140, border: "1px solid #ccc", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#999" }}>
-                  No photo
-                </div>
-              )}
-              <ActionForm action={updateStickerDesign} style={{ marginTop: 4 }}>
-                <input type="hidden" name="id" value={design.id} />
-                <input style={{ width: "100%", padding: 4, fontSize: 12, marginBottom: 4, boxSizing: "border-box" }} name="name" defaultValue={design.name} required />
-                <input style={{ fontSize: 11, marginBottom: 4, width: "100%" }} type="file" name="photo" accept="image/*" />
-                <label style={{ fontSize: 11, color: "#666", display: "block", marginBottom: 4 }}>
-                  <input type="checkbox" name="isActive" defaultChecked={design.is_active} /> Active
-                </label>
-                <button type="submit" style={{ padding: "3px 8px", fontSize: 12, marginBottom: 4 }}>
-                  Save
-                </button>
-              </ActionForm>
-              <DeleteStickerDesignButton id={design.id} name={design.name} />
-            </div>
-          ))}
-        </div>
-
-        <ActionForm
-          action={createStickerDesign}
-          successMessage="Design added."
-          style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}
-        >
-          <input type="hidden" name="artistId" value={artist.id} />
-          <div>
-            <label style={{ fontSize: 12, color: "#666", display: "block" }}>Name</label>
-            <input style={{ padding: 6, fontSize: 13 }} name="name" required />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, color: "#666", display: "block" }}>Photo</label>
-            <input style={{ fontSize: 12 }} type="file" name="photo" accept="image/*" />
-          </div>
-          <button type="submit" style={{ padding: "6px 14px" }}>
-            Add design
-          </button>
-        </ActionForm>
-      </section>
-
-      <section style={card}>
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>Add a product</h2>
         <ActionForm action={createProduct}>
           <input type="hidden" name="artistId" value={artist.id} />
@@ -538,15 +456,11 @@ export default async function VendorDashboardPage({
           </p>
 
           <p style={{ fontSize: 13, marginBottom: 6 }}>Variants (label, price, stock) — fill in at least one</p>
-          <p style={{ fontSize: 12, color: "#999", marginBottom: 6 }}>
-            "Designs per pack" is for sticker packs only -- leave blank otherwise.
-          </p>
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
               <input style={{ flex: "2 1 160px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantLabel-${i}`} placeholder="Label (e.g. A5)" />
               <input style={{ flex: "1 1 90px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantPrice-${i}`} type="number" min={0} step="0.01" placeholder="Price" />
               <input style={{ flex: "1 1 90px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantStock-${i}`} type="number" min={0} placeholder="Stock" />
-              <input style={{ flex: "1 1 90px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantPackSize-${i}`} type="number" min={1} placeholder="Designs/pack" />
             </div>
           ))}
 
@@ -634,14 +548,6 @@ export default async function VendorDashboardPage({
                     max={product.is_one_off ? 1 : undefined}
                     name={`variantStock-${variant.id}`}
                     defaultValue={product.is_one_off ? Math.min(variant.stock, 1) : variant.stock}
-                    style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
-                  />
-                  <label style={{ fontSize: 12, color: "#666" }}>Designs/pack</label>
-                  <input
-                    type="number"
-                    min={1}
-                    name={`variantPackSize-${variant.id}`}
-                    defaultValue={variant.pack_size ?? ""}
                     style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
                   />
                 </div>

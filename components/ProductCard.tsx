@@ -6,7 +6,6 @@ export type ProductVariant = {
   label: string;
   price: number;
   stock: number;
-  packSize?: number; // sticker_pack variants only: how many sticker_designs to pick
 };
 
 export type Product = {
@@ -82,7 +81,6 @@ export default function ProductCard({ product }: { product: Product }) {
         {!soldOut && product.variants && product.variants.length > 0 && (
           <AddToBagButton
             productId={product.id}
-            artistId={product.artistId}
             productName={product.name}
             imageUrl={product.imageUrl}
             variants={product.variants}

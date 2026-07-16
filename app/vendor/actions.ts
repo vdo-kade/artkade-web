@@ -186,12 +186,11 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
     return { ok: false, error: "You don't have permission to add products to this stall." };
   }
 
-  const variants: { label: string; price: number; stock: number; packSize: number | null }[] = [];
+  const variants: { label: string; price: number; stock: number }[] = [];
   for (let i = 0; i < MAX_VARIANT_ROWS; i++) {
     const label = formData.get(`variantLabel-${i}`);
     const price = Number(formData.get(`variantPrice-${i}`));
     const stock = Number(formData.get(`variantStock-${i}`));
-    const packSizeRaw = Number(formData.get(`variantPackSize-${i}`));
     if (typeof label !== "string" || !label.trim()) continue;
     if (!Number.isFinite(price) || price < 0) continue;
     const rawStock = Number.isFinite(stock) && stock > 0 ? Math.floor(stock) : 0;
@@ -202,12 +201,6 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
       // server-side (the authoritative check) rather than trusting a max
       // attribute on the client input, which a submitted form can't bypass.
       stock: isOneOff ? Math.min(rawStock, 1) : rawStock,
-      // Sticker pack variants only -- how many sticker_designs the customer
-      // must pick to fill this tier. Ignored/unused for every other
-      // category, same as sticker_pack_selection is unused for non-pack
-      // orders. No DB constraint, validated here like every other numeric
-      // field in this file.
-      packSize: Number.isFinite(packSizeRaw) && packSizeRaw > 0 ? Math.floor(packSizeRaw) : null,
     });
   }
   if (variants.length === 0) return { ok: false, error: "Add at least one valid variant." };
@@ -254,7 +247,6 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
       label: v.label,
       price: v.price,
       stock: v.stock,
-      pack_size: v.packSize,
     }))
   );
 
@@ -334,18 +326,16 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
       const label = formData.get(`variantLabel-${variantId}`);
       const price = Number(formData.get(`variantPrice-${variantId}`));
       const stock = Number(formData.get(`variantStock-${variantId}`));
-      const packSizeRaw = Number(formData.get(`variantPackSize-${variantId}`));
       if (typeof label !== "string" || !label.trim()) return null;
       if (!Number.isFinite(price) || price < 0) return null;
       if (!Number.isFinite(stock) || stock < 0) return null;
-      const packSize = Number.isFinite(packSizeRaw) && packSizeRaw > 0 ? Math.floor(packSizeRaw) : null;
       // Same server-side hard cap as createProduct -- a one-of-one item
       // can never end up with more than 1 unit in stock, regardless of
       // what was submitted.
       const clampedStock = isOneOff ? Math.min(Math.floor(stock), 1) : Math.floor(stock);
       return supabase
         .from("product_variants")
-        .update({ label: label.trim(), price, stock: clampedStock, pack_size: packSize })
+        .update({ label: label.trim(), price, stock: clampedStock })
         .eq("id", variantId)
         .eq("product_id", productId);
     })
@@ -388,158 +378,6 @@ export async function deleteProduct(formData: FormData): Promise<ActionState> {
 
   revalidatePath("/vendor");
   revalidatePath("/");
-  return { ok: true };
-}
-
-// Individual sticker designs a customer picks from to build a custom pack
-// (see the AddToBagButton picker) -- scoped identically to product CRUD
-// above. A vendor needs designs here before any of their sticker_pack
-// variants (pack_size, above) are actually fillable.
-
-async function uploadStickerDesignPhoto(
-  supabase: ReturnType<typeof createAdminClient>,
-  artistSlug: string,
-  file: File
-): Promise<string | null> {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "png";
-  const path = `sticker-designs/${artistSlug}/${Date.now()}.${ext}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from("media")
-    .upload(path, await file.arrayBuffer(), {
-      contentType: file.type || "application/octet-stream",
-    });
-  if (uploadError) {
-    console.error("Sticker design photo upload failed:", uploadError);
-    return null;
-  }
-
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from("media").getPublicUrl(path);
-  return publicUrl;
-}
-
-export async function createStickerDesign(formData: FormData): Promise<ActionState> {
-  // A falsy session here means the Supabase auth session has actually
-  // died server-side (expired refresh token, rotation reuse, etc.) --
-  // silently no-opping left the form looking "unresponsive" with zero
-  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
-  // restore a working session immediately.
-  const session = await getSessionRole();
-  if (!session) redirect("/admin/login");
-
-  const artistId = formData.get("artistId");
-  const name = formData.get("name");
-  const file = formData.get("photo");
-  if (typeof artistId !== "string" || typeof name !== "string" || !name.trim()) {
-    return { ok: false, error: "Name is required." };
-  }
-  if (session.role === "vendor" && artistId !== session.artistId) {
-    return { ok: false, error: "You don't have permission to add designs to this stall." };
-  }
-
-  const supabase = createAdminClient();
-  const { data: artist } = await supabase.from("artists").select("slug").eq("id", artistId).maybeSingle();
-  if (!artist) return { ok: false, error: "Stall not found." };
-
-  const { count } = await supabase
-    .from("sticker_designs")
-    .select("id", { count: "exact", head: true })
-    .eq("artist_id", artistId);
-
-  let imageUrl: string | null = null;
-  if (file instanceof File && file.size > 0) {
-    imageUrl = await uploadStickerDesignPhoto(supabase, artist.slug, file);
-  }
-
-  const { error } = await supabase.from("sticker_designs").insert({
-    artist_id: artistId,
-    name: name.trim(),
-    image_url: imageUrl,
-    sort_order: count ?? 0,
-  });
-  if (error) {
-    console.error("Failed to create sticker design:", error);
-    return { ok: false, error: "Something went wrong. Check server logs." };
-  }
-
-  revalidatePath("/vendor");
-  return { ok: true };
-}
-
-export async function updateStickerDesign(formData: FormData): Promise<ActionState> {
-  // A falsy session here means the Supabase auth session has actually
-  // died server-side (expired refresh token, rotation reuse, etc.) --
-  // silently no-opping left the form looking "unresponsive" with zero
-  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
-  // restore a working session immediately.
-  const session = await getSessionRole();
-  if (!session) redirect("/admin/login");
-
-  const id = formData.get("id");
-  const name = formData.get("name");
-  const isActive = formData.get("isActive") === "on";
-  const file = formData.get("photo");
-  if (typeof id !== "string") return { ok: false, error: "Missing design." };
-  if (typeof name !== "string" || !name.trim()) return { ok: false, error: "Name is required." };
-
-  const supabase = createAdminClient();
-
-  let ownerQuery = supabase.from("sticker_designs").select("id, artists(slug)").eq("id", id);
-  if (session.role === "vendor") {
-    ownerQuery = ownerQuery.eq("artist_id", session.artistId);
-  }
-  const { data: existing } = await ownerQuery.maybeSingle<{ id: string; artists: { slug: string } | null }>();
-  if (!existing || !existing.artists) return { ok: false, error: "Design not found." };
-
-  let imageUrl: string | undefined;
-  if (file instanceof File && file.size > 0) {
-    const uploaded = await uploadStickerDesignPhoto(supabase, existing.artists.slug, file);
-    if (uploaded) imageUrl = uploaded;
-  }
-
-  const { error } = await supabase
-    .from("sticker_designs")
-    .update({
-      name: name.trim(),
-      is_active: isActive,
-      ...(imageUrl ? { image_url: imageUrl } : {}),
-    })
-    .eq("id", id);
-  if (error) {
-    console.error("Failed to update sticker design:", error);
-    return { ok: false, error: "Something went wrong. Check server logs." };
-  }
-
-  revalidatePath("/vendor");
-  return { ok: true };
-}
-
-export async function deleteStickerDesign(formData: FormData): Promise<ActionState> {
-  // A falsy session here means the Supabase auth session has actually
-  // died server-side (expired refresh token, rotation reuse, etc.) --
-  // silently no-opping left the form looking "unresponsive" with zero
-  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
-  // restore a working session immediately.
-  const session = await getSessionRole();
-  if (!session) redirect("/admin/login");
-
-  const id = formData.get("id");
-  if (typeof id !== "string") return { ok: false, error: "Missing design." };
-
-  const supabase = createAdminClient();
-  let query = supabase.from("sticker_designs").delete().eq("id", id);
-  if (session.role === "vendor") {
-    query = query.eq("artist_id", session.artistId);
-  }
-  const { error } = await query;
-  if (error) {
-    console.error("Failed to delete sticker design:", error);
-    return { ok: false, error: "Something went wrong. Check server logs." };
-  }
-
-  revalidatePath("/vendor");
   return { ok: true };
 }
 

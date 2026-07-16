@@ -162,7 +162,6 @@ export default function CheckoutPage() {
           variant_id: item.variantId,
           quantity: item.quantity,
           unit_price: item.unitPrice,
-          sticker_pack_selection: item.stickerSelection ?? null,
         }))
       );
       if (itemsError) throw itemsError;
@@ -237,11 +236,6 @@ export default function CheckoutPage() {
                       <p className="text-warm-grey text-xs">
                         {item.variantLabel} × {item.quantity}
                       </p>
-                      {item.stickerSelection && item.stickerSelection.length > 0 && (
-                        <p className="text-warm-grey text-xs mt-1">
-                          Designs: {item.stickerSelection.map((d) => d.name).join(", ")}
-                        </p>
-                      )}
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <span className="font-mono">

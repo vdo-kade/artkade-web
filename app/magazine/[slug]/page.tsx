@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import ExpandableImage from "@/components/ExpandableImage";
 import { createClient } from "@/lib/supabase-server";
 
 export const revalidate = 0;
@@ -51,12 +52,12 @@ export default async function MagazinePostPage({ params }: { params: { slug: str
         )}
 
         {post.hero_image_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={post.hero_image_url}
-            alt={post.title}
-            className="w-full aspect-video object-cover mb-10 border border-line"
-          />
+          <div className="bg-white border border-line p-3 mb-10">
+            <ExpandableImage
+              images={[{ src: post.hero_image_url, alt: post.title }]}
+              frameClassName="bg-paper flex items-center justify-center overflow-hidden"
+            />
+          </div>
         )}
 
         <div className="space-y-5 text-warm-grey">

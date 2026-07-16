@@ -98,7 +98,7 @@ export default async function LandingPage() {
           Fresh off the press
         </p>
         <h2 className="font-display text-3xl md:text-4xl mb-10">From the current drop</h2>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 items-start">
           {FEATURED_PRODUCTS.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}

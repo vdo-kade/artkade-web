@@ -1,5 +1,6 @@
 import Countdown from "./Countdown";
 import AddToBagButton from "./AddToBagButton";
+import ExpandableImage from "./ExpandableImage";
 
 export type ProductVariant = {
   id: string;
@@ -42,19 +43,13 @@ export default function ProductCard({ product }: { product: Product }) {
         </span>
       )}
 
-      {/* the "polaroid" frame: white border, image, caption strip underneath */}
-      <div className="aspect-square bg-paper flex items-center justify-center overflow-hidden">
-        {product.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={product.imageUrl}
-            alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-200 ease-out hover:scale-110"
-          />
-        ) : (
-          <span className="text-warm-grey text-xs font-mono">photo coming soon</span>
-        )}
-      </div>
+      {/* the "polaroid" frame: white border, image at its own natural
+          aspect ratio (never cropped), caption strip underneath */}
+      <ExpandableImage
+        images={product.imageUrl ? [{ src: product.imageUrl, alt: product.name }] : []}
+        frameClassName="bg-paper min-h-[8rem] flex items-center justify-center overflow-hidden"
+        placeholder={<span className="text-warm-grey text-xs font-mono">photo coming soon</span>}
+      />
 
       <div className="pt-3 px-1">
         <p className="font-display text-base leading-tight">{product.name}</p>

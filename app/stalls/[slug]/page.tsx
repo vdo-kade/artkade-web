@@ -80,7 +80,7 @@ export default async function StallPage({ params }: { params: { slug: string } }
         {sections.map((section) => (
           <div key={section.title} className="mb-14">
             <h2 className="font-display text-2xl mb-6">{section.title}</h2>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 items-start">
               {section.products.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase-admin";
-import { createClient as createAuthClient } from "@/lib/supabase-server";
+import { getCachedUser } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import { logout } from "@/app/admin/actions";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/catalogue";
@@ -20,6 +20,7 @@ import PasswordChangeForm from "./PasswordChangeForm";
 import NewProductToast from "./NewProductToast";
 import DashboardTabs from "./DashboardTabs";
 import AdminNav from "@/components/AdminNav";
+import { ActionForm } from "@/components/ActionForm";
 
 export const revalidate = 0;
 
@@ -165,10 +166,12 @@ export default async function VendorDashboardPage({
     return <VendorDashboardError />;
   }
 
-  const authClient = await createAuthClient();
+  // Same cached call getSessionRole() above already made -- see
+  // getCachedUser() in lib/supabase-server.ts for why a second independent
+  // call here used to be able to break the session outright.
   const {
     data: { user },
-  } = await authClient.auth.getUser();
+  } = await getCachedUser();
 
   let stallList: Pick<ArtistRow, "id" | "slug" | "name">[] = [];
   let selectedArtistId: string;
@@ -391,7 +394,7 @@ export default async function VendorDashboardPage({
           <>
       <section style={card}>
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>Stall details</h2>
-        <form action={updateStallDetails}>
+        <ActionForm action={updateStallDetails} successMessage="Stall details saved.">
           <input type="hidden" name="artistId" value={artist.id} />
           <label style={{ fontSize: 12, color: "#666" }}>Name</label>
           <input style={inputStyle} name="name" defaultValue={artist.name} required />
@@ -424,7 +427,7 @@ export default async function VendorDashboardPage({
           <button type="submit" style={{ padding: "6px 14px" }}>
             Save details
           </button>
-        </form>
+        </ActionForm>
       </section>
 
       <section style={card}>
@@ -472,7 +475,7 @@ export default async function VendorDashboardPage({
                   No photo
                 </div>
               )}
-              <form action={updateStickerDesign} style={{ marginTop: 4 }}>
+              <ActionForm action={updateStickerDesign} style={{ marginTop: 4 }}>
                 <input type="hidden" name="id" value={design.id} />
                 <input style={{ width: "100%", padding: 4, fontSize: 12, marginBottom: 4, boxSizing: "border-box" }} name="name" defaultValue={design.name} required />
                 <input style={{ fontSize: 11, marginBottom: 4, width: "100%" }} type="file" name="photo" accept="image/*" />
@@ -482,13 +485,17 @@ export default async function VendorDashboardPage({
                 <button type="submit" style={{ padding: "3px 8px", fontSize: 12, marginBottom: 4 }}>
                   Save
                 </button>
-              </form>
+              </ActionForm>
               <DeleteStickerDesignButton id={design.id} name={design.name} />
             </div>
           ))}
         </div>
 
-        <form action={createStickerDesign} style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+        <ActionForm
+          action={createStickerDesign}
+          successMessage="Design added."
+          style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}
+        >
           <input type="hidden" name="artistId" value={artist.id} />
           <div>
             <label style={{ fontSize: 12, color: "#666", display: "block" }}>Name</label>
@@ -501,12 +508,12 @@ export default async function VendorDashboardPage({
           <button type="submit" style={{ padding: "6px 14px" }}>
             Add design
           </button>
-        </form>
+        </ActionForm>
       </section>
 
       <section style={card}>
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>Add a product</h2>
-        <form action={createProduct}>
+        <ActionForm action={createProduct}>
           <input type="hidden" name="artistId" value={artist.id} />
           <label style={{ fontSize: 12, color: "#666" }}>Name</label>
           <input style={inputStyle} name="name" required />
@@ -546,7 +553,7 @@ export default async function VendorDashboardPage({
           <button type="submit" style={{ padding: "6px 14px", marginTop: 8 }}>
             Add product
           </button>
-        </form>
+        </ActionForm>
       </section>
 
       <section style={card}>
@@ -558,7 +565,7 @@ export default async function VendorDashboardPage({
             id={`product-${product.id}`}
             style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}
           >
-            <form action={updateProduct}>
+            <ActionForm action={updateProduct} successMessage="Product updated.">
               <input type="hidden" name="productId" value={product.id} />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <strong>{product.name}</strong>
@@ -642,7 +649,7 @@ export default async function VendorDashboardPage({
               <button type="submit" style={{ padding: "6px 14px", marginTop: 8 }}>
                 Save changes
               </button>
-            </form>
+            </ActionForm>
             <div style={{ marginTop: 8 }}>
               <DeleteProductButton productId={product.id} productName={product.name} />
             </div>
@@ -797,14 +804,14 @@ function PhotoUploader({
       ) : (
         <p style={{ fontSize: 12, color: "#999", marginBottom: 8 }}>No {label.toLowerCase()} yet.</p>
       )}
-      <form action={uploadStallPhoto}>
+      <ActionForm action={uploadStallPhoto} successMessage="Photo uploaded.">
         <input type="hidden" name="artistId" value={artistId} />
         <input type="hidden" name="field" value={field} />
         <input type="file" name="file" accept="image/*" required style={{ marginBottom: 8, fontSize: 12 }} />
         <button type="submit" style={{ padding: "4px 10px", fontSize: 13 }}>
           Upload
         </button>
-      </form>
+      </ActionForm>
     </div>
   );
 }

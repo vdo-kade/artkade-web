@@ -8,6 +8,7 @@ import { extendPopup, reactivateStall, checkExpiryNow } from "./dashboard-action
 import ConvertToPermanentButton from "./ConvertToPermanentButton";
 import Countdown from "@/components/Countdown";
 import AdminNav from "@/components/AdminNav";
+import { ActionForm } from "@/components/ActionForm";
 
 export const revalidate = 0;
 
@@ -183,11 +184,11 @@ export default async function GodDashboardPage() {
         >
           + Add pop-up vendor
         </Link>
-        <form action={checkExpiryNow}>
+        <ActionForm action={checkExpiryNow} successMessage="Checked.">
           <button type="submit" style={{ padding: "6px 14px", fontSize: 13 }}>
             Check expiry now
           </button>
-        </form>
+        </ActionForm>
       </div>
 
       {artists.length === 0 && <p>No stalls yet.</p>}
@@ -235,16 +236,20 @@ export default async function GodDashboardPage() {
               </Link>
 
               {status === "scheduled" && (
-                <form action={reactivateStall}>
+                <ActionForm action={reactivateStall} successMessage="Activated.">
                   <input type="hidden" name="artistId" value={artist.id} />
                   <button type="submit" style={{ padding: "4px 10px", fontSize: 12 }}>
                     Activate now
                   </button>
-                </form>
+                </ActionForm>
               )}
 
               {(status === "active-popup" || status === "archived-popup") && (
-                <form action={extendPopup} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <ActionForm
+                  action={extendPopup}
+                  successMessage="Extended."
+                  style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}
+                >
                   <input type="hidden" name="artistId" value={artist.id} />
                   <input
                     style={inputStyle}
@@ -256,7 +261,7 @@ export default async function GodDashboardPage() {
                   <button type="submit" style={{ padding: "4px 10px", fontSize: 12 }}>
                     {status === "archived-popup" ? "Reactivate with new end date" : "Extend"}
                   </button>
-                </form>
+                </ActionForm>
               )}
 
               {(status === "active-popup" || status === "scheduled" || status === "archived-popup") && (
@@ -264,12 +269,12 @@ export default async function GodDashboardPage() {
               )}
 
               {status === "inactive" && (
-                <form action={reactivateStall}>
+                <ActionForm action={reactivateStall} successMessage="Reactivated.">
                   <input type="hidden" name="artistId" value={artist.id} />
                   <button type="submit" style={{ padding: "4px 10px", fontSize: 12 }}>
                     Reactivate
                   </button>
-                </form>
+                </ActionForm>
               )}
             </div>
           </div>

@@ -5,6 +5,7 @@ import { getSessionRole } from "@/lib/session-role";
 import { recordOfflineSale } from "../mode-actions";
 import EndOfDayPanel from "./EndOfDayPanel";
 import AdminNav from "@/components/AdminNav";
+import { ActionForm } from "@/components/ActionForm";
 
 export const revalidate = 0;
 
@@ -142,8 +143,10 @@ export default async function VendorModePage({ searchParams }: { searchParams: {
           <div key={product.id} style={{ borderTop: "1px solid #eee", paddingTop: 10, marginTop: 10 }}>
             <strong>{product.name}</strong>
             {product.product_variants.map((v) => (
-              <form
+              <ActionForm
                 action={recordOfflineSale}
+                successMessage="Logged."
+                resetOnSuccess
                 key={v.id}
                 style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}
               >
@@ -163,7 +166,7 @@ export default async function VendorModePage({ searchParams }: { searchParams: {
                 <button type="submit" style={{ padding: "4px 10px", fontSize: 13 }} disabled={v.stock <= 0}>
                   {v.stock <= 0 ? "Sold out" : "Sold"}
                 </button>
-              </form>
+              </ActionForm>
             ))}
           </div>
         ))}

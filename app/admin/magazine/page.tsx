@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getSessionRole } from "@/lib/session-role";
 import AdminNav from "@/components/AdminNav";
+import { ActionForm } from "@/components/ActionForm";
 import { createPost, updatePost } from "./actions";
 import DeletePostButton from "./DeletePostButton";
 
@@ -87,7 +88,7 @@ export default async function AdminMagazinePage() {
 
       <section style={card}>
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>New post</h2>
-        <form action={createPost}>
+        <ActionForm action={createPost} resetOnSuccess>
           <label style={{ fontSize: 12, color: "#666" }}>Title</label>
           <input style={inputStyle} name="title" required />
           <label style={{ fontSize: 12, color: "#666" }}>Excerpt</label>
@@ -113,14 +114,14 @@ export default async function AdminMagazinePage() {
           <button type="submit" style={{ padding: "6px 14px" }}>
             Create post
           </button>
-        </form>
+        </ActionForm>
       </section>
 
       <h2 style={{ fontSize: 18, margin: "24px 0 12px" }}>All posts</h2>
       {posts.length === 0 && <p>No posts yet.</p>}
       {posts.map((post) => (
         <div key={post.id} style={card}>
-          <form action={updatePost}>
+          <ActionForm action={updatePost} successMessage="Saved.">
             <input type="hidden" name="id" value={post.id} />
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <strong>{post.title}</strong>
@@ -163,7 +164,7 @@ export default async function AdminMagazinePage() {
             <button type="submit" style={{ padding: "6px 14px" }}>
               Save changes
             </button>
-          </form>
+          </ActionForm>
           <div style={{ marginTop: 8 }}>
             <DeletePostButton id={post.id} title={post.title} />
           </div>

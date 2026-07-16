@@ -8,6 +8,7 @@ import { getSessionRole } from "@/lib/session-role";
 import { CATEGORY_ORDER } from "@/lib/catalogue";
 import { uploadStallPhotoFile, type PhotoField } from "@/lib/storage";
 import { runPopupLifecycleTick } from "@/lib/popup-expiry";
+import type { ActionState } from "@/lib/action-state";
 
 // Every action here re-derives the caller's role/artist from their session
 // (never trusts a client-submitted artistId) and scopes the write to that
@@ -15,7 +16,7 @@ import { runPopupLifecycleTick } from "@/lib/popup-expiry";
 // pattern already used by app/admin/orders/actions.ts (service-role client
 // + explicit filters, no RLS).
 
-export async function updateStallDetails(formData: FormData) {
+export async function updateStallDetails(formData: FormData): Promise<ActionState> {
   // A falsy session here means the Supabase auth session has actually
   // died server-side (expired refresh token, rotation reuse, etc.) --
   // silently no-opping left the form looking "unresponsive" with zero
@@ -31,8 +32,12 @@ export async function updateStallDetails(formData: FormData) {
   const isPopup = formData.get("isPopup") === "on";
   const popupStartsAtRaw = formData.get("popupStartsAt");
   const popupEndsAtRaw = formData.get("popupEndsAt");
-  if (typeof artistId !== "string" || typeof name !== "string") return;
-  if (session.role === "vendor" && artistId !== session.artistId) return;
+  if (typeof artistId !== "string" || typeof name !== "string") {
+    return { ok: false, error: "Missing required fields." };
+  }
+  if (session.role === "vendor" && artistId !== session.artistId) {
+    return { ok: false, error: "You don't have permission to edit this stall." };
+  }
 
   // <input type="datetime-local"> submits a local-time string with no
   // timezone (e.g. "2026-08-01T14:30"); the Date constructor parses that
@@ -47,7 +52,7 @@ export async function updateStallDetails(formData: FormData) {
       : null;
 
   const supabase = createAdminClient();
-  await supabase
+  const { error } = await supabase
     .from("artists")
     .update({
       name,
@@ -58,6 +63,10 @@ export async function updateStallDetails(formData: FormData) {
       popup_ends_at: popupEndsAt,
     })
     .eq("id", artistId);
+  if (error) {
+    console.error("Failed to update stall details:", error);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
 
   // Applies any consequence of the new dates immediately (e.g. an end date
   // just pushed into the past archives right away) rather than waiting for
@@ -69,11 +78,12 @@ export async function updateStallDetails(formData: FormData) {
 
   revalidatePath("/vendor");
   revalidatePath("/");
+  return { ok: true };
 }
 
 const PHOTO_FIELDS = ["logo_url", "hero_image_url"] as const;
 
-export async function uploadStallPhoto(formData: FormData) {
+export async function uploadStallPhoto(formData: FormData): Promise<ActionState> {
   // A falsy session here means the Supabase auth session has actually
   // died server-side (expired refresh token, rotation reuse, etc.) --
   // silently no-opping left the form looking "unresponsive" with zero
@@ -85,10 +95,18 @@ export async function uploadStallPhoto(formData: FormData) {
   const artistId = formData.get("artistId");
   const field = formData.get("field");
   const file = formData.get("file");
-  if (typeof artistId !== "string" || typeof field !== "string") return;
-  if (!PHOTO_FIELDS.includes(field as PhotoField)) return;
-  if (session.role === "vendor" && artistId !== session.artistId) return;
-  if (!(file instanceof File) || file.size === 0) return;
+  if (typeof artistId !== "string" || typeof field !== "string") {
+    return { ok: false, error: "Missing required fields." };
+  }
+  if (!PHOTO_FIELDS.includes(field as PhotoField)) {
+    return { ok: false, error: "Invalid photo field." };
+  }
+  if (session.role === "vendor" && artistId !== session.artistId) {
+    return { ok: false, error: "You don't have permission to edit this stall." };
+  }
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Choose a photo to upload." };
+  }
 
   const supabase = createAdminClient();
   const { data: artist } = await supabase
@@ -96,17 +114,22 @@ export async function uploadStallPhoto(formData: FormData) {
     .select("slug")
     .eq("id", artistId)
     .maybeSingle();
-  if (!artist) return;
+  if (!artist) return { ok: false, error: "Stall not found." };
 
   const publicUrl = await uploadStallPhotoFile(supabase, artist.slug, field as PhotoField, file);
-  if (!publicUrl) return;
+  if (!publicUrl) return { ok: false, error: "Upload failed. Check server logs." };
 
-  await supabase
+  const { error } = await supabase
     .from("artists")
     .update({ [field as PhotoField]: publicUrl })
     .eq("id", artistId);
+  if (error) {
+    console.error("Failed to save uploaded photo URL:", error);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
 
   revalidatePath("/vendor");
+  return { ok: true };
 }
 
 // A product needs at least one buyable variant; this caps how many variant
@@ -138,7 +161,7 @@ async function uploadProductPhoto(
   return publicUrl;
 }
 
-export async function createProduct(formData: FormData) {
+export async function createProduct(formData: FormData): Promise<ActionState> {
   // A falsy session here means the Supabase auth session has actually
   // died server-side (expired refresh token, rotation reuse, etc.) --
   // silently no-opping left the form looking "unresponsive" with zero
@@ -153,9 +176,15 @@ export async function createProduct(formData: FormData) {
   const category = formData.get("category");
   const file = formData.get("photo");
   const isOneOff = formData.get("isOneOff") === "on";
-  if (typeof artistId !== "string" || typeof name !== "string" || !name.trim()) return;
-  if (typeof category !== "string" || !CATEGORY_ORDER.includes(category)) return;
-  if (session.role === "vendor" && artistId !== session.artistId) return;
+  if (typeof artistId !== "string" || typeof name !== "string" || !name.trim()) {
+    return { ok: false, error: "Name is required." };
+  }
+  if (typeof category !== "string" || !CATEGORY_ORDER.includes(category)) {
+    return { ok: false, error: "Choose a valid category." };
+  }
+  if (session.role === "vendor" && artistId !== session.artistId) {
+    return { ok: false, error: "You don't have permission to add products to this stall." };
+  }
 
   const variants: { label: string; price: number; stock: number; packSize: number | null }[] = [];
   for (let i = 0; i < MAX_VARIANT_ROWS; i++) {
@@ -181,7 +210,7 @@ export async function createProduct(formData: FormData) {
       packSize: Number.isFinite(packSizeRaw) && packSizeRaw > 0 ? Math.floor(packSizeRaw) : null,
     });
   }
-  if (variants.length === 0) return;
+  if (variants.length === 0) return { ok: false, error: "Add at least one valid variant." };
 
   const supabase = createAdminClient();
   const { data: artist } = await supabase
@@ -189,7 +218,7 @@ export async function createProduct(formData: FormData) {
     .select("slug")
     .eq("id", artistId)
     .maybeSingle();
-  if (!artist) return;
+  if (!artist) return { ok: false, error: "Stall not found." };
 
   const { count } = await supabase
     .from("products")
@@ -216,7 +245,7 @@ export async function createProduct(formData: FormData) {
     .single();
   if (error || !product) {
     console.error("Failed to create product:", error);
-    return;
+    return { ok: false, error: "Something went wrong. Check server logs." };
   }
 
   await supabase.from("product_variants").insert(
@@ -240,7 +269,7 @@ export async function createProduct(formData: FormData) {
   redirect(`/vendor?artist=${artist.slug}&created=${product.id}`);
 }
 
-export async function updateProduct(formData: FormData) {
+export async function updateProduct(formData: FormData): Promise<ActionState> {
   // A falsy session here means the Supabase auth session has actually
   // died server-side (expired refresh token, rotation reuse, etc.) --
   // silently no-opping left the form looking "unresponsive" with zero
@@ -256,9 +285,11 @@ export async function updateProduct(formData: FormData) {
   const isActive = formData.get("isActive") === "on";
   const isOneOff = formData.get("isOneOff") === "on";
   const file = formData.get("photo");
-  if (typeof productId !== "string") return;
-  if (typeof name !== "string" || !name.trim()) return;
-  if (typeof category !== "string" || !CATEGORY_ORDER.includes(category)) return;
+  if (typeof productId !== "string") return { ok: false, error: "Missing product." };
+  if (typeof name !== "string" || !name.trim()) return { ok: false, error: "Name is required." };
+  if (typeof category !== "string" || !CATEGORY_ORDER.includes(category)) {
+    return { ok: false, error: "Choose a valid category." };
+  }
 
   const supabase = createAdminClient();
 
@@ -273,7 +304,7 @@ export async function updateProduct(formData: FormData) {
     ownerQuery = ownerQuery.eq("artist_id", session.artistId);
   }
   const { data: existing } = await ownerQuery.maybeSingle<{ id: string; artists: { slug: string } | null }>();
-  if (!existing || !existing.artists) return;
+  if (!existing || !existing.artists) return { ok: false, error: "Product not found." };
 
   let imageUrl: string | undefined;
   if (file instanceof File && file.size > 0) {
@@ -281,7 +312,7 @@ export async function updateProduct(formData: FormData) {
     if (uploaded) imageUrl = uploaded;
   }
 
-  await supabase
+  const { error } = await supabase
     .from("products")
     .update({
       name: name.trim(),
@@ -292,9 +323,13 @@ export async function updateProduct(formData: FormData) {
       ...(imageUrl ? { image_url: imageUrl } : {}),
     })
     .eq("id", productId);
+  if (error) {
+    console.error("Failed to update product:", error);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
 
   const variantIds = formData.getAll("variantId") as string[];
-  await Promise.all(
+  const variantResults = await Promise.all(
     variantIds.map((variantId) => {
       const label = formData.get(`variantLabel-${variantId}`);
       const price = Number(formData.get(`variantPrice-${variantId}`));
@@ -315,12 +350,15 @@ export async function updateProduct(formData: FormData) {
         .eq("product_id", productId);
     })
   );
+  const variantError = variantResults.find((r) => r?.error)?.error;
+  if (variantError) console.error("Failed to update a product variant:", variantError);
 
   revalidatePath("/vendor");
   revalidatePath("/");
+  return { ok: true };
 }
 
-export async function deleteProduct(formData: FormData) {
+export async function deleteProduct(formData: FormData): Promise<ActionState> {
   // A falsy session here means the Supabase auth session has actually
   // died server-side (expired refresh token, rotation reuse, etc.) --
   // silently no-opping left the form looking "unresponsive" with zero
@@ -330,7 +368,7 @@ export async function deleteProduct(formData: FormData) {
   if (!session) redirect("/admin/login");
 
   const productId = formData.get("productId");
-  if (typeof productId !== "string") return;
+  if (typeof productId !== "string") return { ok: false, error: "Missing product." };
 
   const supabase = createAdminClient();
   let query = supabase.from("products").delete().eq("id", productId);
@@ -339,14 +377,18 @@ export async function deleteProduct(formData: FormData) {
   }
   // A product that has been ordered before is referenced by order_items
   // (no ON DELETE on that FK by design -- see supabase/schema.sql), so the
-  // delete fails there rather than silently orphaning order history. That's
-  // logged and swallowed like every other write in this file; the vendor
-  // can still archive it instead via the "Active" checkbox.
+  // delete fails there rather than silently orphaning order history. Surface
+  // that as a real message now instead of swallowing it -- the vendor can
+  // still archive it instead via the "Active" checkbox.
   const { error } = await query;
-  if (error) console.error("Failed to delete product:", error);
+  if (error) {
+    console.error("Failed to delete product:", error);
+    return { ok: false, error: "Couldn't delete -- it may already have orders. Try archiving it instead." };
+  }
 
   revalidatePath("/vendor");
   revalidatePath("/");
+  return { ok: true };
 }
 
 // Individual sticker designs a customer picks from to build a custom pack
@@ -378,7 +420,7 @@ async function uploadStickerDesignPhoto(
   return publicUrl;
 }
 
-export async function createStickerDesign(formData: FormData) {
+export async function createStickerDesign(formData: FormData): Promise<ActionState> {
   // A falsy session here means the Supabase auth session has actually
   // died server-side (expired refresh token, rotation reuse, etc.) --
   // silently no-opping left the form looking "unresponsive" with zero
@@ -390,12 +432,16 @@ export async function createStickerDesign(formData: FormData) {
   const artistId = formData.get("artistId");
   const name = formData.get("name");
   const file = formData.get("photo");
-  if (typeof artistId !== "string" || typeof name !== "string" || !name.trim()) return;
-  if (session.role === "vendor" && artistId !== session.artistId) return;
+  if (typeof artistId !== "string" || typeof name !== "string" || !name.trim()) {
+    return { ok: false, error: "Name is required." };
+  }
+  if (session.role === "vendor" && artistId !== session.artistId) {
+    return { ok: false, error: "You don't have permission to add designs to this stall." };
+  }
 
   const supabase = createAdminClient();
   const { data: artist } = await supabase.from("artists").select("slug").eq("id", artistId).maybeSingle();
-  if (!artist) return;
+  if (!artist) return { ok: false, error: "Stall not found." };
 
   const { count } = await supabase
     .from("sticker_designs")
@@ -413,12 +459,16 @@ export async function createStickerDesign(formData: FormData) {
     image_url: imageUrl,
     sort_order: count ?? 0,
   });
-  if (error) console.error("Failed to create sticker design:", error);
+  if (error) {
+    console.error("Failed to create sticker design:", error);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
 
   revalidatePath("/vendor");
+  return { ok: true };
 }
 
-export async function updateStickerDesign(formData: FormData) {
+export async function updateStickerDesign(formData: FormData): Promise<ActionState> {
   // A falsy session here means the Supabase auth session has actually
   // died server-side (expired refresh token, rotation reuse, etc.) --
   // silently no-opping left the form looking "unresponsive" with zero
@@ -431,8 +481,8 @@ export async function updateStickerDesign(formData: FormData) {
   const name = formData.get("name");
   const isActive = formData.get("isActive") === "on";
   const file = formData.get("photo");
-  if (typeof id !== "string") return;
-  if (typeof name !== "string" || !name.trim()) return;
+  if (typeof id !== "string") return { ok: false, error: "Missing design." };
+  if (typeof name !== "string" || !name.trim()) return { ok: false, error: "Name is required." };
 
   const supabase = createAdminClient();
 
@@ -441,7 +491,7 @@ export async function updateStickerDesign(formData: FormData) {
     ownerQuery = ownerQuery.eq("artist_id", session.artistId);
   }
   const { data: existing } = await ownerQuery.maybeSingle<{ id: string; artists: { slug: string } | null }>();
-  if (!existing || !existing.artists) return;
+  if (!existing || !existing.artists) return { ok: false, error: "Design not found." };
 
   let imageUrl: string | undefined;
   if (file instanceof File && file.size > 0) {
@@ -449,7 +499,7 @@ export async function updateStickerDesign(formData: FormData) {
     if (uploaded) imageUrl = uploaded;
   }
 
-  await supabase
+  const { error } = await supabase
     .from("sticker_designs")
     .update({
       name: name.trim(),
@@ -457,11 +507,16 @@ export async function updateStickerDesign(formData: FormData) {
       ...(imageUrl ? { image_url: imageUrl } : {}),
     })
     .eq("id", id);
+  if (error) {
+    console.error("Failed to update sticker design:", error);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
 
   revalidatePath("/vendor");
+  return { ok: true };
 }
 
-export async function deleteStickerDesign(formData: FormData) {
+export async function deleteStickerDesign(formData: FormData): Promise<ActionState> {
   // A falsy session here means the Supabase auth session has actually
   // died server-side (expired refresh token, rotation reuse, etc.) --
   // silently no-opping left the form looking "unresponsive" with zero
@@ -471,7 +526,7 @@ export async function deleteStickerDesign(formData: FormData) {
   if (!session) redirect("/admin/login");
 
   const id = formData.get("id");
-  if (typeof id !== "string") return;
+  if (typeof id !== "string") return { ok: false, error: "Missing design." };
 
   const supabase = createAdminClient();
   let query = supabase.from("sticker_designs").delete().eq("id", id);
@@ -479,12 +534,16 @@ export async function deleteStickerDesign(formData: FormData) {
     query = query.eq("artist_id", session.artistId);
   }
   const { error } = await query;
-  if (error) console.error("Failed to delete sticker design:", error);
+  if (error) {
+    console.error("Failed to delete sticker design:", error);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
 
   revalidatePath("/vendor");
+  return { ok: true };
 }
 
-export async function changePassword(formData: FormData) {
+export async function changePassword(formData: FormData): Promise<ActionState> {
   // A falsy session here means the Supabase auth session has actually
   // died server-side (expired refresh token, rotation reuse, etc.) --
   // silently no-opping left the form looking "unresponsive" with zero
@@ -495,13 +554,21 @@ export async function changePassword(formData: FormData) {
 
   const newPassword = formData.get("newPassword");
   const confirmPassword = formData.get("confirmPassword");
-  if (typeof newPassword !== "string" || typeof confirmPassword !== "string") return;
-  if (newPassword.length < 8 || newPassword !== confirmPassword) return;
+  if (typeof newPassword !== "string" || typeof confirmPassword !== "string") {
+    return { ok: false, error: "Missing required fields." };
+  }
+  if (newPassword.length < 8) return { ok: false, error: "Password must be at least 8 characters." };
+  if (newPassword !== confirmPassword) return { ok: false, error: "Passwords don't match." };
 
   // Operates on whichever user the request's session cookie belongs to --
   // the anon-key, cookie-bound client, not the service-role admin client --
   // so this can only ever change the caller's own password.
   const supabase = await createAuthClient();
   const { error } = await supabase.auth.updateUser({ password: newPassword });
-  if (error) console.error("Failed to update password:", error);
+  if (error) {
+    console.error("Failed to update password:", error);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
+
+  return { ok: true };
 }

@@ -1,4 +1,4 @@
-import { createClient } from "./supabase-server";
+import { getCachedUser } from "./supabase-server";
 
 // A user's role/artist link lives entirely in Supabase Auth's
 // app_metadata (the same place the original single admin flag lived --
@@ -13,10 +13,9 @@ export type SessionRole = { role: "admin" } | { role: "vendor"; artistId: string
 // endpoints in their own right, so each one needs its own authorization
 // check, not just the page that renders their trigger form.
 export async function getSessionRole(): Promise<SessionRole | null> {
-  const supabase = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getCachedUser();
 
   const role = user?.app_metadata?.role;
   if (role === "admin") return { role: "admin" };

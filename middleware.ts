@@ -45,7 +45,21 @@ export async function middleware(request: NextRequest) {
     ? isAdmin || isVendor
     : isAdmin;
 
-  if (!allowed) {
+  // A Server Action submission POSTs to the same page URL it lives on, so it
+  // matches this same matcher -- this request carries Next's own
+  // "Next-Action" header identifying which action to run. Redirecting it
+  // here (a plain HTTP redirect) instead of letting the request reach that
+  // action breaks the fetch-based action protocol: the client expects an
+  // action-response payload back, not a redirect to an unrelated page, so it
+  // fails silently instead of navigating anywhere (this is what made Save
+  // look unresponsive with a dead session, even though every action already
+  // redirects to /admin/login itself on a falsy getSessionRole() -- that
+  // in-action redirect never got a chance to run). Every action re-derives
+  // the session and redirects on its own, so it's safe to just let these
+  // requests through and leave the auth decision to the action.
+  const isServerAction = request.headers.has("next-action");
+
+  if (!allowed && !isServerAction) {
     return NextResponse.redirect(new URL("/admin/login", request.url));
   }
 

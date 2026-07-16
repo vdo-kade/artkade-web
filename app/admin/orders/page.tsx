@@ -1,6 +1,9 @@
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase-admin";
-import { createClient as createAuthClient } from "@/lib/supabase-server";
+import { getCachedUser } from "@/lib/supabase-server";
+import { getSessionRole } from "@/lib/session-role";
 import AdminNav from "@/components/AdminNav";
+import { ActionForm } from "@/components/ActionForm";
 import { approveOrder, rejectOrder } from "./actions";
 import { logout } from "../actions";
 
@@ -130,6 +133,13 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default async function AdminOrdersPage() {
+  // Was missing entirely -- every other admin/vendor page re-derives the
+  // caller's role and bounces a dead/wrong-role session to login rather
+  // than relying solely on middleware. See app/admin/orders/actions.ts for
+  // why the actions need this same check.
+  const session = await getSessionRole();
+  if (session?.role !== "admin") redirect("/admin/login");
+
   let supabase: ReturnType<typeof createAdminClient>;
   try {
     supabase = createAdminClient();
@@ -138,10 +148,11 @@ export default async function AdminOrdersPage() {
     return <AdminOrdersError />;
   }
 
-  const authClient = await createAuthClient();
+  // Same cached call getSessionRole() above already made -- see
+  // getCachedUser() in lib/supabase-server.ts.
   const {
     data: { user },
-  } = await authClient.auth.getUser();
+  } = await getCachedUser();
 
   const [pendingResult, reviewedResult] = await Promise.all([
     supabase
@@ -224,7 +235,7 @@ export default async function AdminOrdersPage() {
           </div>
 
           <div style={{ display: "flex", gap: 8 }}>
-            <form action={approveOrder}>
+            <ActionForm action={approveOrder} successMessage="Approved.">
               <input type="hidden" name="orderId" value={order.id} />
               <button
                 type="submit"
@@ -232,8 +243,8 @@ export default async function AdminOrdersPage() {
               >
                 Approve
               </button>
-            </form>
-            <form action={rejectOrder}>
+            </ActionForm>
+            <ActionForm action={rejectOrder} successMessage="Rejected.">
               <input type="hidden" name="orderId" value={order.id} />
               <button
                 type="submit"
@@ -241,7 +252,7 @@ export default async function AdminOrdersPage() {
               >
                 Reject
               </button>
-            </form>
+            </ActionForm>
           </div>
         </div>
       ))}

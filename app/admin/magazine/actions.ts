@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getSessionRole } from "@/lib/session-role";
 import { slugify } from "@/lib/slugify";
+import type { ActionState } from "@/lib/action-state";
 
 // Magazine is site-wide editorial content, not per-stall -- admin-only,
 // entirely separate from app/vendor/actions.ts's vendor-scoped writes.
@@ -29,7 +30,7 @@ async function uploadMagazineHero(
   return publicUrl;
 }
 
-export async function createPost(formData: FormData) {
+export async function createPost(formData: FormData): Promise<ActionState> {
   // A non-admin session here almost always means the auth session died
   // server-side (expired/rotated refresh token) rather than a real
   // authorization denial -- silently no-opping left the form looking
@@ -45,7 +46,7 @@ export async function createPost(formData: FormData) {
   const artistId = formData.get("artistId");
   const published = formData.get("published") === "on";
   const file = formData.get("hero");
-  if (typeof title !== "string" || !title.trim()) return;
+  if (typeof title !== "string" || !title.trim()) return { ok: false, error: "Title is required." };
 
   const supabase = createAdminClient();
 
@@ -75,7 +76,7 @@ export async function createPost(formData: FormData) {
   });
   if (error) {
     console.error("Failed to create magazine post:", error);
-    return;
+    return { ok: false, error: "Something went wrong. Check server logs." };
   }
 
   revalidatePath("/admin/magazine");
@@ -85,7 +86,7 @@ export async function createPost(formData: FormData) {
   redirect("/admin/magazine");
 }
 
-export async function updatePost(formData: FormData) {
+export async function updatePost(formData: FormData): Promise<ActionState> {
   // A non-admin session here almost always means the auth session died
   // server-side (expired/rotated refresh token) rather than a real
   // authorization denial -- silently no-opping left the form looking
@@ -102,7 +103,9 @@ export async function updatePost(formData: FormData) {
   const artistId = formData.get("artistId");
   const published = formData.get("published") === "on";
   const file = formData.get("hero");
-  if (typeof id !== "string" || typeof title !== "string" || !title.trim()) return;
+  if (typeof id !== "string" || typeof title !== "string" || !title.trim()) {
+    return { ok: false, error: "Title is required." };
+  }
 
   const supabase = createAdminClient();
   const { data: existing } = await supabase
@@ -110,7 +113,7 @@ export async function updatePost(formData: FormData) {
     .select("slug, published_at")
     .eq("id", id)
     .maybeSingle();
-  if (!existing) return;
+  if (!existing) return { ok: false, error: "Post not found." };
 
   let heroUrl: string | undefined;
   if (file instanceof File && file.size > 0) {
@@ -122,26 +125,31 @@ export async function updatePost(formData: FormData) {
   // published post (or toggling it back on later) doesn't reset its date.
   const publishedAt = published && !existing.published_at ? new Date().toISOString() : existing.published_at;
 
-  await supabase
+  const { error } = await supabase
     .from("magazine_posts")
     .update({
       title: title.trim(),
       excerpt: typeof excerpt === "string" && excerpt.trim() ? excerpt.trim() : null,
-      body: typeof body === "string" && body.trim() ? body.trim() : null,
       category: typeof category === "string" && category.trim() ? category.trim() : null,
       artist_id: typeof artistId === "string" && artistId ? artistId : null,
+      body: typeof body === "string" && body.trim() ? body.trim() : null,
       published,
       published_at: publishedAt,
       ...(heroUrl ? { hero_image_url: heroUrl } : {}),
     })
     .eq("id", id);
+  if (error) {
+    console.error("Failed to update magazine post:", error);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
 
   revalidatePath("/admin/magazine");
   revalidatePath("/magazine");
   revalidatePath(`/magazine/${existing.slug}`);
+  return { ok: true };
 }
 
-export async function deletePost(formData: FormData) {
+export async function deletePost(formData: FormData): Promise<ActionState> {
   // A non-admin session here almost always means the auth session died
   // server-side (expired/rotated refresh token) rather than a real
   // authorization denial -- silently no-opping left the form looking
@@ -151,12 +159,16 @@ export async function deletePost(formData: FormData) {
   if (session?.role !== "admin") redirect("/admin/login");
 
   const id = formData.get("id");
-  if (typeof id !== "string") return;
+  if (typeof id !== "string") return { ok: false, error: "Missing post." };
 
   const supabase = createAdminClient();
   const { error } = await supabase.from("magazine_posts").delete().eq("id", id);
-  if (error) console.error("Failed to delete magazine post:", error);
+  if (error) {
+    console.error("Failed to delete magazine post:", error);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
 
   revalidatePath("/admin/magazine");
   revalidatePath("/magazine");
+  return { ok: true };
 }

@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { getSupabaseEnv } from "./supabase-env";
 
 // Server Component / route handler Supabase client. Reads go through the
@@ -39,3 +40,19 @@ export async function createClient() {
     },
   });
 }
+
+// getUser() re-derives the session from cookies and, if the access token is
+// expired, refreshes it -- which the setAll catch above shows can't persist
+// from a Server Component render. Every consumer used to call this
+// independently (getSessionRole(), plus a separate explicit call in a
+// couple of pages just to display the user's email), so a single expired
+// token could trigger several independent refresh attempts within the same
+// request. Supabase's refresh tokens are single-use and rotate on refresh,
+// so the second attempt reuses a token the first already burned and fails
+// outright -- not a transient "expired" state but a dead one, which is why
+// it took a fresh sign-in (not just a page refresh) to recover. cache()
+// dedupes all of that down to one real call per request/action.
+export const getCachedUser = cache(async () => {
+  const supabase = await createClient();
+  return supabase.auth.getUser();
+});

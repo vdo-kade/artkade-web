@@ -71,7 +71,7 @@ function BankTransferDetails() {
         </dl>
       ) : (
         <p className="text-sm text-warm-grey">
-          Payment details aren&apos;t set up yet — please contact us before sending a transfer.
+          Payment details aren&apos;t set up yet. Please contact us before sending a transfer.
         </p>
       )}
       <p className="text-xs text-warm-grey mt-3">
@@ -107,7 +107,7 @@ export default function CheckoutPage() {
     }
     if (belowMinimum) {
       setError(
-        `Minimum order is Rs. ${MIN_ORDER_TOTAL.toLocaleString("en-US")} — add Rs. ${amountUnderMinimum.toLocaleString("en-US")} more to continue.`
+        `Minimum order is Rs. ${MIN_ORDER_TOTAL.toLocaleString("en-US")}. Add Rs. ${amountUnderMinimum.toLocaleString("en-US")} more to continue.`
       );
       return;
     }
@@ -261,7 +261,7 @@ export default function CheckoutPage() {
               </div>
               {belowMinimum && (
                 <p className="text-sm text-red-600 mt-2">
-                  Minimum order is Rs. {MIN_ORDER_TOTAL.toLocaleString("en-US")} — add Rs.{" "}
+                  Minimum order is Rs. {MIN_ORDER_TOTAL.toLocaleString("en-US")}. Add Rs.{" "}
                   {amountUnderMinimum.toLocaleString("en-US")} more to continue.
                 </p>
               )}

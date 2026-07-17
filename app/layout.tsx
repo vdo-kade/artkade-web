@@ -20,7 +20,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Art Kade — a curated Sri Lankan creative marketplace",
+  title: "Art Kade: a curated Sri Lankan creative marketplace",
   description:
     "Kade means shop. Art Kade is where Vdokade, Nuwan Shilpa and future artists release limited-drop prints, stickers and merch.",
 };

@@ -79,9 +79,9 @@ insert into product_variants (product_id, label, price, stock)
 select p.id, x.label, x.price, x.stock
 from products p
 join (values
-  ('Small — Sticker paper laminated', 200, 40),
-  ('Medium — PVC Laminated', 300, 25),
-  ('Large — PVC Laminated', 600, 15)
+  ('Small, sticker paper laminated', 200, 40),
+  ('Medium, PVC laminated', 300, 25),
+  ('Large, PVC laminated', 600, 15)
 ) as x(label, price, stock) on true
 where p.category = 'sticker_pack';
 

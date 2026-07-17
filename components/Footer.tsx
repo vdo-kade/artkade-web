@@ -23,7 +23,7 @@ export default function Footer() {
             Follow along
           </p>
           <ul className="space-y-2">
-            <li><a href="#" className="hover:text-accent">Instagram — @vdo_kade</a></li>
+            <li><a href="#" className="hover:text-accent">Instagram: @vdo_kade</a></li>
             <li><a href="#" className="hover:text-accent">WhatsApp us</a></li>
           </ul>
         </div>

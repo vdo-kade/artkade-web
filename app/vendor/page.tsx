@@ -449,13 +449,13 @@ export default async function VendorDashboardPage({
           <input style={{ marginBottom: 12, fontSize: 12 }} type="file" name="photo" accept="image/*" />
 
           <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
-            <input type="checkbox" name="isOneOff" /> One of one — only 1 unit exists ever
+            <input type="checkbox" name="isOneOff" /> One of one, only 1 unit exists ever
           </label>
           <p style={{ fontSize: 12, color: "#999", marginBottom: 6 }}>
             Stock will be capped at 1 no matter what you enter below, and it won't restock once sold.
           </p>
 
-          <p style={{ fontSize: 13, marginBottom: 6 }}>Variants (label, price, stock) — fill in at least one</p>
+          <p style={{ fontSize: 13, marginBottom: 6 }}>Fill in at least one variant (label, price, stock)</p>
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
               <input style={{ flex: "2 1 160px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantLabel-${i}`} placeholder="Label (e.g. A5)" />
@@ -515,7 +515,7 @@ export default async function VendorDashboardPage({
                 (visible on the stall)
               </label>
               <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
-                <input type="checkbox" name="isOneOff" defaultChecked={product.is_one_off} /> One of one — only 1
+                <input type="checkbox" name="isOneOff" defaultChecked={product.is_one_off} /> One of one, only 1
                 unit exists ever
               </label>
               {product.is_one_off && (

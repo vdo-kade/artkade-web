@@ -1,15 +1,47 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseEnv } from "@/lib/supabase-env";
+import { GATE_COOKIE_NAME, GATE_PATH, getExpectedGateCookieValue } from "@/lib/gate";
 
-// Gatekeeper for every /admin/* and /vendor/* route (matcher below).
-// /admin/login is the only exception -- everything else redirects to it
-// unless the request carries a session for a user whose app_metadata.role
-// grants access: "admin" for /admin/*, and "admin" or "vendor" for
-// /vendor/* (a vendor manages their own artist row there; admin can manage
-// any stall from the same dashboard -- see lib/session-role.ts).
+// Two independent gates share this one middleware, checked in order:
+//
+// 1. Site-wide password gate (every route via the matcher below, minus
+//    _next/static, _next/image, favicons, and /api/* -- see the matcher
+//    comment for why /api is excluded). Redirects to /gate if the request
+//    carries no valid gate cookie.
+// 2. The existing /admin/* and /vendor/* role gate, unchanged: redirects
+//    to /admin/login unless the session's app_metadata.role grants access.
+//
+// Both apply the SAME fix for the same historical bug: a Server Action
+// submission POSTs to the same page URL it lives on, carrying Next's own
+// "Next-Action" header. A plain HTTP redirect on that request breaks the
+// fetch-based Server Action protocol -- the client expects an action-
+// response payload back, not a redirect to an unrelated page, so it fails
+// silently instead of navigating anywhere (this is what made Save look
+// unresponsive with a dead session, even though the action itself already
+// redirects to /admin/login on a falsy getSessionRole() -- that in-action
+// redirect never got a chance to run). So every Server Action request is
+// let through untouched here, on the assumption that reaching the page
+// that action lives on already required passing whichever gate applies to
+// it -- each action can still enforce its own auth independently (see
+// app/vendor/actions.ts and friends) the same way it already did before
+// this gate existed.
 export async function middleware(request: NextRequest) {
-  if (request.nextUrl.pathname === "/admin/login") {
+  const pathname = request.nextUrl.pathname;
+  const isServerAction = request.headers.has("next-action");
+
+  if (pathname !== GATE_PATH && !isServerAction) {
+    const expectedGateCookie = await getExpectedGateCookieValue();
+    const actualGateCookie = request.cookies.get(GATE_COOKIE_NAME)?.value;
+    if (!expectedGateCookie || actualGateCookie !== expectedGateCookie) {
+      return NextResponse.redirect(new URL(GATE_PATH, request.url));
+    }
+  }
+
+  if (pathname === "/admin/login") {
+    return NextResponse.next();
+  }
+  if (!pathname.startsWith("/admin") && !pathname.startsWith("/vendor")) {
     return NextResponse.next();
   }
 
@@ -41,24 +73,10 @@ export async function middleware(request: NextRequest) {
   const isAdmin = role === "admin";
   const isVendor = role === "vendor";
 
-  const allowed = request.nextUrl.pathname.startsWith("/vendor")
-    ? isAdmin || isVendor
-    : isAdmin;
+  const allowed = pathname.startsWith("/vendor") ? isAdmin || isVendor : isAdmin;
 
-  // A Server Action submission POSTs to the same page URL it lives on, so it
-  // matches this same matcher -- this request carries Next's own
-  // "Next-Action" header identifying which action to run. Redirecting it
-  // here (a plain HTTP redirect) instead of letting the request reach that
-  // action breaks the fetch-based action protocol: the client expects an
-  // action-response payload back, not a redirect to an unrelated page, so it
-  // fails silently instead of navigating anywhere (this is what made Save
-  // look unresponsive with a dead session, even though every action already
-  // redirects to /admin/login itself on a falsy getSessionRole() -- that
-  // in-action redirect never got a chance to run). Every action re-derives
-  // the session and redirects on its own, so it's safe to just let these
-  // requests through and leave the auth decision to the action.
-  const isServerAction = request.headers.has("next-action");
-
+  // Same Server Action carve-out as the site gate above (isServerAction is
+  // computed once, at the top of this function, and reused here).
   if (!allowed && !isServerAction) {
     return NextResponse.redirect(new URL("/admin/login", request.url));
   }
@@ -67,5 +85,12 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/vendor/:path*"],
+  // Runs on every route except: Next's own static/image asset pipeline,
+  // the site's favicon files (app/icon.png, app/apple-icon.png,
+  // favicon.ico), and /api/* -- API routes aren't page navigations, and at
+  // least one (the cron route) is deliberately called with no cookies at
+  // all by Vercel's infrastructure, so gating it here would silently break
+  // scheduled popup expiry (see app/api/cron/expire-popups/route.ts's own
+  // comment about being outside middleware's reach on purpose).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|api/).*)"],
 };

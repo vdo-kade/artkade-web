@@ -172,6 +172,16 @@ create table freebies (
   created_at timestamptz not null default now()
 );
 
+-- ---------- BETA SIGNUPS ----------
+-- Email capture on the pre-launch splash gate (app/gate) -- a lead-capture
+-- path, NOT a password bypass. Deliberately minimal: no name, no dedup
+-- constraint, nothing beyond what the gate page actually collects.
+create table beta_signups (
+  id uuid primary key default gen_random_uuid(),
+  email text not null,
+  created_at timestamptz not null default now()
+);
+
 -- ---------- MAGAZINE ----------
 create table magazine_posts (
   id uuid primary key default gen_random_uuid(),
@@ -205,6 +215,7 @@ alter table order_items enable row level security;
 alter table order_status_history enable row level security;
 alter table offline_sales enable row level security;
 alter table stall_collaborators enable row level security;
+alter table beta_signups enable row level security;
 
 create policy "public can read active artists" on artists
   for select using (is_active);
@@ -235,6 +246,13 @@ create policy "anyone can place an order" on orders
   for insert with check (true);
 
 create policy "anyone can add items to their own order" on order_items
+  for insert with check (true);
+
+-- Write-only for anon, same reasoning as orders above: no select policy
+-- means RLS blocks reads entirely for anyone but the service role, so
+-- collected emails are never publicly readable even though anyone can
+-- submit one.
+create policy "anyone can submit a beta signup" on beta_signups
   for insert with check (true);
 
 -- No select/update/delete policies are created for orders/order_items/

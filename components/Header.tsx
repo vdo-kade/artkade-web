@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useBag } from "./BagProvider";
-import { LOGO_URL } from "@/lib/brand";
+import { SHORT_LOGO_URL, LOGO_OUTLINE_FILTER_SMALL } from "@/lib/brand";
 
 const NAV_LINKS = [
   { href: "/#stalls", label: "The Stalls" },
@@ -30,23 +30,22 @@ export default function Header() {
       <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3" onClick={() => setMenuOpen(false)}>
           {/*
-            The logo's neutral element (the "ART" wordmark + triangle-eye
-            mark) is pure white -- against this header's cream background
-            that's a ~1.1:1 contrast ratio, effectively invisible (vs
-            ~17.8:1 on a dark backdrop, which is what the source art was
-            actually designed for -- see the "Logo on black.png" sibling
-            asset). Rather than recolour the artwork, the logo sits on a
-            small ink-coloured plate (matching the site's existing matte
-            black, e.g. the image lightbox overlay and the pop-up badge --
-            not a one-off black) so it gets the dark backdrop it needs
-            while the header itself stays cream. A soft, diffuse shadow
-            (not a hard/heavy one) lifts the plate off the cream field for
-            a quiet "elevated" read rather than a flat sticker.
+            The short "AX" mark sits transparent directly on the cream
+            header (no backing plate) -- its neutral triangle-eye element
+            is pure white, ~1.1:1 against cream on its own, so a single
+            soft/ambient shadow wouldn't create a legible edge. Instead
+            LOGO_OUTLINE_FILTER_SMALL stacks several 0-blur drop-shadows in
+            a ring around the artwork's silhouette (a hard-edged pseudo-
+            stroke in `ink`, the same dark token already proven legible as
+            this site's default body-text-on-cream colour) plus one larger
+            soft shadow underneath for depth -- see lib/brand.ts.
           */}
-          <span className="inline-flex items-center rounded-xl bg-ink px-4 py-2 shadow-[0_10px_24px_-8px_rgba(28,23,18,0.45)]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={LOGO_URL} alt="Art Kade" className="h-8 w-auto" />
-          </span>
+          <img
+            src={SHORT_LOGO_URL}
+            alt="Art Kade"
+            className="h-9 w-auto"
+            style={{ filter: LOGO_OUTLINE_FILTER_SMALL }}
+          />
         </Link>
         <nav className="hidden md:flex items-center gap-8 font-body text-sm">
           {NAV_LINKS.map((link) => (

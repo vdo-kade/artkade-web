@@ -5,7 +5,7 @@ import ProductCard, { Product } from "@/components/ProductCard";
 import StickerWheel, { WheelImage } from "@/components/StickerWheel";
 import { createClient } from "@/lib/supabase-server";
 import { PRODUCT_SELECT, mapProduct, mapStall } from "@/lib/catalogue";
-import { LOGO_URL } from "@/lib/brand";
+import { LOGO_URL, LOGO_OUTLINE_FILTER_LARGE } from "@/lib/brand";
 
 export const revalidate = 0;
 
@@ -55,39 +55,44 @@ export default async function LandingPage() {
       <Header />
       <StickerWheel images={WHEEL_IMAGES} />
 
-      {/* HERO -- the site's real brand moment: full-bleed matte black (the
-          same "ink" token used everywhere else on the site, not a one-off
-          black) with the logo large and centered, so it reads as a
+      {/* HERO -- the site's real brand moment: the full logo large and
+          centered on the site's normal cream field, so it reads as a
           deliberate statement rather than a bigger version of the header's
-          small elevated mark. */}
-      <section className="bg-ink text-white">
-        <div className="mx-auto max-w-6xl px-6 pt-16 pb-20 md:pt-20 md:pb-24 text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={LOGO_URL}
-            alt="Art Kade"
-            className="mx-auto h-24 sm:h-32 md:h-40 w-auto mb-8 drop-shadow-[0_16px_32px_rgba(0,0,0,0.5)]"
-          />
-          <p className="font-mono text-xs uppercase tracking-eyebrow text-white/50 mb-6">
-            Kade means shop
-          </p>
-          <h1 className="font-display text-5xl md:text-7xl leading-[0.95] mb-6">
-            A curated Sri Lankan
-            <br />
-            creative marketplace
-          </h1>
-          <p className="max-w-xl mx-auto text-white/70 mb-10">
-            Art Kade is where Vdokade, Nuwan Shilpa and future artists release
-            limited prints, stickers and merch. Every stall is its own little
-            world. Come wander through.
-          </p>
-          <a
-            href="#stalls"
-            className="inline-block bg-accent text-ink px-7 py-3 text-sm font-medium tracking-wide hover:bg-white transition-colors"
-          >
-            Browse the Stalls
-          </a>
-        </div>
+          small mark. The logo stays transparent (no backing plate) --
+          LOGO_OUTLINE_FILTER_LARGE gives its white elements a hard-edged
+          ink outline for legibility against cream, scaled up from the
+          header's version to stay proportionally visible at this size (see
+          lib/brand.ts). CTA reverts to the site's standard ink button
+          (same as checkout's) now that the section is cream again -- the
+          gold-fill version only existed to stand out against a dark
+          section that's no longer here. */}
+      <section className="mx-auto max-w-6xl px-6 pt-20 pb-24 text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={LOGO_URL}
+          alt="Art Kade"
+          className="mx-auto h-24 sm:h-32 md:h-40 w-auto mb-8"
+          style={{ filter: LOGO_OUTLINE_FILTER_LARGE }}
+        />
+        <p className="font-mono text-xs uppercase tracking-eyebrow text-warm-grey mb-6">
+          Kade means shop
+        </p>
+        <h1 className="font-display text-5xl md:text-7xl leading-[0.95] mb-6">
+          A curated Sri Lankan
+          <br />
+          creative marketplace
+        </h1>
+        <p className="max-w-xl mx-auto text-warm-grey mb-10">
+          Art Kade is where Vdokade, Nuwan Shilpa and future artists release
+          limited prints, stickers and merch. Every stall is its own little
+          world. Come wander through.
+        </p>
+        <a
+          href="#stalls"
+          className="inline-block bg-ink text-white px-7 py-3 text-sm font-medium tracking-wide hover:bg-accent transition-colors"
+        >
+          Browse the Stalls
+        </a>
       </section>
 
       {/* FEATURED STALLS */}

@@ -27,7 +27,13 @@ export default function Header() {
   }, [menuOpen]);
 
   return (
-    <header className="sticky top-0 z-40 bg-cream/90 backdrop-blur border-b border-line">
+    // pt-[env(...)] keeps the header's own cream background sitting flush
+    // against the true top edge of the screen (behind the status bar/
+    // notch, now that app/layout.tsx's viewport export sets
+    // viewportFit: "cover") while pushing the actual logo/nav/hamburger
+    // content down clear of the notch -- the padding, not the header's
+    // position, is what "fits" it to the screen.
+    <header className="sticky top-0 z-40 bg-cream/90 backdrop-blur border-b border-line pt-[env(safe-area-inset-top)]">
       <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3" onClick={() => setMenuOpen(false)}>
           {/*

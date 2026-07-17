@@ -110,7 +110,12 @@ export default function ExpandableImage({
               type="button"
               onClick={() => setOpen(false)}
               aria-label="Close"
-              className="absolute top-4 right-4 sm:top-6 sm:right-6 text-white/80 hover:text-white text-3xl leading-none w-10 h-10 flex items-center justify-center"
+              // top-[calc(...)] adds env(safe-area-inset-top) on top of the
+              // usual offset -- this is a portalled fixed-inset-0 overlay,
+              // so on a notch/Dynamic Island phone (app/layout.tsx sets
+              // viewportFit: "cover") an unpadded top-4 would sit right
+              // under/behind the notch instead of clear of it.
+              className="absolute top-[calc(env(safe-area-inset-top)_+_1rem)] right-4 sm:top-[calc(env(safe-area-inset-top)_+_1.5rem)] sm:right-6 text-white/80 hover:text-white text-3xl leading-none w-10 h-10 flex items-center justify-center"
             >
               &times;
             </button>

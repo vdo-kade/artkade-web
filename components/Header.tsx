@@ -11,6 +11,16 @@ const NAV_LINKS = [
   { href: "/#drop", label: "Latest Drop" },
 ];
 
+// The logo's neutral element (the "ART" wordmark + triangle-eye mark) is
+// pure white -- against this header's cream background that's a ~1.1:1
+// contrast ratio, effectively invisible (vs ~17.8:1 on a dark backdrop,
+// which is what the source art was actually designed for -- see the
+// "Logo on black.png" sibling asset). Rather than recolour the artwork,
+// the logo sits on a small ink-coloured chip so it gets the dark backdrop
+// it needs while the header itself stays cream.
+const LOGO_URL =
+  "https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/Site_assets/Logo%20on%20trans.png";
+
 export default function Header() {
   const { totalItems } = useBag();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -28,8 +38,10 @@ export default function Header() {
     <header className="sticky top-0 z-40 bg-cream/90 backdrop-blur border-b border-line">
       <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3" onClick={() => setMenuOpen(false)}>
-          {/* EDIT: swap for the real Art Kade logo once you share it */}
-          <span className="font-display text-2xl tracking-tight">Art Kade</span>
+          <span className="inline-flex items-center rounded-lg bg-ink px-3 py-1.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={LOGO_URL} alt="Art Kade" className="h-7 w-auto" />
+          </span>
         </Link>
         <nav className="hidden md:flex items-center gap-8 font-body text-sm">
           {NAV_LINKS.map((link) => (

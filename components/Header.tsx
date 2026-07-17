@@ -9,6 +9,7 @@ import { SHORT_LOGO_URL, LOGO_OUTLINE_FILTER_SMALL } from "@/lib/brand";
 const NAV_LINKS = [
   { href: "/#stalls", label: "The Stalls" },
   { href: "/magazine", label: "Magazine" },
+  { href: "/freebies", label: "Freebies" },
   { href: "/#drop", label: "Latest Drop" },
 ];
 

@@ -5,8 +5,10 @@ import { getCachedUser } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import { logout } from "@/app/admin/actions";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/catalogue";
-import { updateStallDetails, uploadStallPhoto, createProduct, updateProduct } from "./actions";
+import { FREEBIE_CATEGORY_LABELS, FREEBIE_CATEGORY_ORDER, FREEBIE_SELECT, type FreebieRow } from "@/lib/freebies";
+import { updateStallDetails, uploadStallPhoto, createProduct, updateProduct, createFreebie } from "./actions";
 import DeleteProductButton from "./DeleteProductButton";
+import DeleteFreebieButton from "./DeleteFreebieButton";
 import PasswordChangeForm from "./PasswordChangeForm";
 import NewProductToast from "./NewProductToast";
 import DashboardTabs from "./DashboardTabs";
@@ -185,7 +187,7 @@ export default async function VendorDashboardPage({
     selectedArtistId = session.artistId;
   }
 
-  const [artistResult, productsResult] = await Promise.all([
+  const [artistResult, productsResult, freebiesResult] = await Promise.all([
     supabase
       .from("artists")
       .select("id, slug, name, tagline, bio, logo_url, hero_image_url, is_popup, popup_starts_at, popup_ends_at")
@@ -199,6 +201,12 @@ export default async function VendorDashboardPage({
       .eq("artist_id", selectedArtistId)
       .order("sort_order")
       .returns<ProductRow[]>(),
+    supabase
+      .from("freebies")
+      .select(FREEBIE_SELECT)
+      .eq("artist_id", selectedArtistId)
+      .order("created_at", { ascending: false })
+      .returns<FreebieRow[]>(),
   ]);
 
   if (artistResult.error) {
@@ -207,6 +215,10 @@ export default async function VendorDashboardPage({
   }
   if (productsResult.error) {
     console.error("Failed to load products:", productsResult.error);
+    return <VendorDashboardError />;
+  }
+  if (freebiesResult.error) {
+    console.error("Failed to load freebies:", freebiesResult.error);
     return <VendorDashboardError />;
   }
 
@@ -322,6 +334,7 @@ export default async function VendorDashboardPage({
 
   const artist = artistResult.data;
   const products = productsResult.data;
+  const freebies = freebiesResult.data ?? [];
 
   if (!artist) {
     return <div style={{ padding: 24, fontFamily: "sans-serif" }}>Stall not found.</div>;
@@ -588,6 +601,65 @@ export default async function VendorDashboardPage({
           ))}
         </section>
       ))}
+          </>
+        }
+        freebies={
+          <>
+            <section style={card}>
+              <h2 style={{ fontSize: 18, marginBottom: 12 }}>Add a freebie</h2>
+              <ActionForm action={createFreebie} successMessage="Freebie added." resetOnSuccess>
+                <input type="hidden" name="artistId" value={artist.id} />
+                <label style={{ fontSize: 12, color: "#666" }}>Title</label>
+                <input style={inputStyle} name="title" required />
+                <label style={{ fontSize: 12, color: "#666" }}>Description</label>
+                <textarea style={{ ...inputStyle, minHeight: 70 }} name="description" />
+                <label style={{ fontSize: 12, color: "#666" }}>Category</label>
+                <select style={inputStyle} name="category" defaultValue={FREEBIE_CATEGORY_ORDER[0]} required>
+                  {FREEBIE_CATEGORY_ORDER.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {FREEBIE_CATEGORY_LABELS[cat]}
+                    </option>
+                  ))}
+                </select>
+                <label style={{ fontSize: 12, color: "#666" }}>File</label>
+                <input style={{ marginBottom: 12, fontSize: 12 }} type="file" name="file" required />
+                <label style={{ fontSize: 12, color: "#666" }}>Thumbnail (optional)</label>
+                <input style={{ marginBottom: 12, fontSize: 12 }} type="file" name="thumbnail" accept="image/*" />
+                <button type="submit" style={{ padding: "6px 14px", marginTop: 8 }}>
+                  Add freebie
+                </button>
+              </ActionForm>
+            </section>
+
+            <section style={card}>
+              <h2 style={{ fontSize: 18, marginBottom: 12 }}>Existing freebies</h2>
+              {freebies.length === 0 && <p style={{ fontSize: 13, color: "#999" }}>No freebies for this stall yet.</p>}
+              {freebies.map((f) => (
+                <div key={f.id} id={`freebie-${f.id}`} style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <strong>{f.title}</strong>
+                    <span style={{ fontSize: 12, color: "#666" }}>{FREEBIE_CATEGORY_LABELS[f.category] ?? f.category}</span>
+                  </div>
+                  {f.description && <p style={{ fontSize: 13, color: "#666", margin: "4px 0" }}>{f.description}</p>}
+                  {f.thumbnail_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={f.thumbnail_url}
+                      alt={f.title}
+                      style={{ maxWidth: 100, maxHeight: 100, margin: "8px 0", border: "1px solid #ccc" }}
+                    />
+                  )}
+                  <p style={{ fontSize: 12, margin: "4px 0" }}>
+                    <a href={f.file_url} target="_blank" rel="noopener noreferrer">
+                      View file &rarr;
+                    </a>
+                  </p>
+                  <div style={{ marginTop: 8 }}>
+                    <DeleteFreebieButton freebieId={f.id} freebieTitle={f.title} />
+                  </div>
+                </div>
+              ))}
+            </section>
           </>
         }
         tracker={

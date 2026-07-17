@@ -153,6 +153,25 @@ alter table bank_transfer_details enable row level security;
 create policy "public can read bank transfer details" on bank_transfer_details
   for select using (true);
 
+-- ---------- FREEBIES ----------
+-- Free digital downloads (wallpapers, ringtones, music, ebooks/zines,
+-- etc), separate from `products`/`product_variants` on purpose: these
+-- never go through the bag/checkout/order-approval flow at all -- the
+-- public /freebies page links straight to file_url for an instant
+-- download, no price, no stock, no order record.
+create type freebie_category as enum ('wallpaper','ringtone','music','book','other');
+
+create table freebies (
+  id uuid primary key default gen_random_uuid(),
+  artist_id uuid not null references artists(id) on delete cascade,
+  title text not null,
+  description text,
+  category freebie_category not null,
+  file_url text not null,
+  thumbnail_url text,
+  created_at timestamptz not null default now()
+);
+
 -- ---------- MAGAZINE ----------
 create table magazine_posts (
   id uuid primary key default gen_random_uuid(),
@@ -179,6 +198,7 @@ create table magazine_posts (
 alter table artists enable row level security;
 alter table products enable row level security;
 alter table product_variants enable row level security;
+alter table freebies enable row level security;
 alter table magazine_posts enable row level security;
 alter table orders enable row level security;
 alter table order_items enable row level security;
@@ -194,6 +214,19 @@ create policy "public can read active products" on products
 
 create policy "public can read active variants" on product_variants
   for select using (is_active);
+
+-- No is_active column on freebies (unlike products) -- every row is public
+-- by design. The public page still filters to active stalls' freebies at
+-- the query level (join against artists.is_active), same as products does
+-- on the landing page feed, so an archived stall's freebies still vanish
+-- even though this policy alone would allow reading them.
+create policy "public can read freebies" on freebies
+  for select using (true);
+
+-- No insert/update/delete policies for freebies, same reasoning as
+-- products/orders below: without a policy, RLS blocks anon writes
+-- entirely. Only the service role key (vendor dashboard's server actions)
+-- can write, and re-derives + checks artist ownership itself.
 
 create policy "public can read published magazine posts" on magazine_posts
   for select using (published);

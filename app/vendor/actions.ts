@@ -6,7 +6,8 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { createClient as createAuthClient } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import { CATEGORY_ORDER } from "@/lib/catalogue";
-import { uploadStallPhotoFile, type PhotoField } from "@/lib/storage";
+import { FREEBIE_CATEGORY_ORDER } from "@/lib/freebies";
+import { uploadStallPhotoFile, uploadFreebieFile, type PhotoField } from "@/lib/storage";
 import { runPopupLifecycleTick } from "@/lib/popup-expiry";
 import type { ActionState } from "@/lib/action-state";
 
@@ -378,6 +379,96 @@ export async function deleteProduct(formData: FormData): Promise<ActionState> {
 
   revalidatePath("/vendor");
   revalidatePath("/");
+  return { ok: true };
+}
+
+export async function createFreebie(formData: FormData): Promise<ActionState> {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
+  const session = await getSessionRole();
+  if (!session) redirect("/admin/login");
+
+  const artistId = formData.get("artistId");
+  const title = formData.get("title");
+  const description = formData.get("description");
+  const category = formData.get("category");
+  const file = formData.get("file");
+  const thumbnail = formData.get("thumbnail");
+  if (typeof artistId !== "string" || typeof title !== "string" || !title.trim()) {
+    return { ok: false, error: "Title is required." };
+  }
+  if (typeof category !== "string" || !FREEBIE_CATEGORY_ORDER.includes(category)) {
+    return { ok: false, error: "Choose a valid category." };
+  }
+  if (session.role === "vendor" && artistId !== session.artistId) {
+    return { ok: false, error: "You don't have permission to add freebies to this stall." };
+  }
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Choose a file to upload." };
+  }
+
+  const supabase = createAdminClient();
+  const { data: artist } = await supabase
+    .from("artists")
+    .select("slug")
+    .eq("id", artistId)
+    .maybeSingle();
+  if (!artist) return { ok: false, error: "Stall not found." };
+
+  const fileUrl = await uploadFreebieFile(supabase, artist.slug, "file", file);
+  if (!fileUrl) return { ok: false, error: "File upload failed. Check server logs." };
+
+  let thumbnailUrl: string | null = null;
+  if (thumbnail instanceof File && thumbnail.size > 0) {
+    thumbnailUrl = await uploadFreebieFile(supabase, artist.slug, "thumbnail", thumbnail);
+  }
+
+  const { error } = await supabase.from("freebies").insert({
+    artist_id: artistId,
+    title: title.trim(),
+    description: typeof description === "string" && description.trim() ? description.trim() : null,
+    category,
+    file_url: fileUrl,
+    thumbnail_url: thumbnailUrl,
+  });
+  if (error) {
+    console.error("Failed to create freebie:", error);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
+
+  revalidatePath("/vendor");
+  revalidatePath("/freebies");
+  return { ok: true };
+}
+
+export async function deleteFreebie(formData: FormData): Promise<ActionState> {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
+  const session = await getSessionRole();
+  if (!session) redirect("/admin/login");
+
+  const freebieId = formData.get("freebieId");
+  if (typeof freebieId !== "string") return { ok: false, error: "Missing freebie." };
+
+  const supabase = createAdminClient();
+  let query = supabase.from("freebies").delete().eq("id", freebieId);
+  if (session.role === "vendor") {
+    query = query.eq("artist_id", session.artistId);
+  }
+  const { error } = await query;
+  if (error) {
+    console.error("Failed to delete freebie:", error);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
+
+  revalidatePath("/vendor");
+  revalidatePath("/freebies");
   return { ok: true };
 }
 

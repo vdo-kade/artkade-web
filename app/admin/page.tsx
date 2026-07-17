@@ -6,6 +6,7 @@ import { runPopupLifecycleTick } from "@/lib/popup-expiry";
 import { logout } from "./actions";
 import { extendPopup, reactivateStall, checkExpiryNow } from "./dashboard-actions";
 import ConvertToPermanentButton from "./ConvertToPermanentButton";
+import DeleteVendorButton from "./DeleteVendorButton";
 import Countdown from "@/components/Countdown";
 import AdminNav from "@/components/AdminNav";
 import { ActionForm } from "@/components/ActionForm";
@@ -276,6 +277,8 @@ export default async function GodDashboardPage() {
                   </button>
                 </ActionForm>
               )}
+
+              <DeleteVendorButton artistId={artist.id} stallName={artist.name} />
             </div>
           </div>
         );

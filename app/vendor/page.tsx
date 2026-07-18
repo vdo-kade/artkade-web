@@ -6,6 +6,7 @@ import { getSessionRole } from "@/lib/session-role";
 import { logout } from "@/app/admin/actions";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/catalogue";
 import { FREEBIE_CATEGORY_LABELS, FREEBIE_CATEGORY_ORDER, FREEBIE_SELECT, type FreebieRow } from "@/lib/freebies";
+import { ORDER_STATUS_LABELS } from "@/lib/orders";
 import { updateStallDetails, uploadStallPhoto, createProduct, updateProduct, createFreebie } from "./actions";
 import DeleteProductButton from "./DeleteProductButton";
 import DeleteFreebieButton from "./DeleteFreebieButton";
@@ -794,22 +795,12 @@ function PhotoUploader({
   );
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  awaiting_review: "Awaiting review",
-  approved: "Approved",
-  rejected: "Rejected",
-  out_of_stock: "Out of stock",
-  shipped: "Shipped",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-};
-
 function TrackerOrderRow({ order }: { order: TrackerOrder }) {
   return (
     <div style={{ borderTop: "1px solid #eee", paddingTop: 8, marginTop: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <strong style={{ fontSize: 13 }}>{order.orderNumber}</strong>
-        <span style={{ fontSize: 12, color: "#666" }}>{STATUS_LABELS[order.status] ?? order.status}</span>
+        <span style={{ fontSize: 12, color: "#666" }}>{ORDER_STATUS_LABELS[order.status] ?? order.status}</span>
       </div>
       <p style={{ fontSize: 13, margin: "2px 0" }}>{order.customerName}</p>
       <p style={{ fontSize: 12, color: "#666", margin: "2px 0" }}>{order.itemNames.join(", ")}</p>

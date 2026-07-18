@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useBag } from "./BagProvider";
+import SearchForm from "./SearchForm";
 import { SHORT_LOGO_URL, LOGO_OUTLINE_FILTER_SMALL } from "@/lib/brand";
 
 const NAV_LINKS = [
@@ -62,6 +63,7 @@ export default function Header() {
           ))}
         </nav>
         <div className="flex items-center gap-3">
+          <SearchForm id="site-search-desktop" className="hidden md:block w-40 lg:w-56" />
           <Link
             href="/checkout"
             aria-label="Your bag"
@@ -110,6 +112,7 @@ export default function Header() {
 
       {menuOpen && (
         <nav className="md:hidden relative z-40 border-t border-line bg-cream px-6 py-6 flex flex-col gap-5 font-display text-2xl">
+          <SearchForm id="site-search-mobile" className="font-body text-base" />
           {NAV_LINKS.map((link) => (
             <Link key={link.href} href={link.href} className="hover:text-accent" onClick={() => setMenuOpen(false)}>
               {link.label}

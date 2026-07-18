@@ -6,6 +6,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useBag, bagItemKey } from "@/components/BagProvider";
 import { createClient } from "@/lib/supabase";
+import { placeOrder } from "./actions";
 
 function generateOrderNumber(): string {
   const n = Math.floor(100000 + Math.random() * 900000);
@@ -133,41 +134,28 @@ export default function CheckoutPage() {
         throw new Error(uploadJson.error || "Failed to upload payment proof.");
       }
 
-      const supabase = createClient();
-
-      // RLS lets anon INSERT into orders but never read rows back (see
-      // supabase/schema.sql), so .insert(...).select() would fail on the
-      // implicit SELECT it triggers. Generate the id client-side instead so
-      // order_items can reference it without reading the order back.
-      const order_id = crypto.randomUUID();
-
-      const { error: orderError } = await supabase.from("orders").insert({
-        id: order_id,
-        order_number,
-        customer_name: name,
-        customer_email: email,
-        customer_phone: phone,
-        shipping_address: address,
-        status: "awaiting_review",
-        payment_proof_url: uploadJson.path,
-        total_amount: totalAmount,
-        customer_notes: notes || null,
+      // The order itself is created server-side (see ./actions.ts) -- only
+      // variantId/quantity are sent, never a price. The server re-derives
+      // price/total from product_variants, actually reserves stock (not
+      // just checks it's non-zero), and re-enforces the minimum below --
+      // this client-side check is a convenience, not the real gate.
+      const result = await placeOrder({
+        items: items.map((item) => ({ variantId: item.variantId, quantity: item.quantity })),
+        customerName: name,
+        customerEmail: email,
+        customerPhone: phone,
+        shippingAddress: address,
+        customerNotes: notes || null,
+        paymentProofPath: uploadJson.path,
+        orderNumber: order_number,
       });
-      if (orderError) throw orderError;
-
-      const { error: itemsError } = await supabase.from("order_items").insert(
-        items.map((item) => ({
-          order_id,
-          product_id: item.productId,
-          variant_id: item.variantId,
-          quantity: item.quantity,
-          unit_price: item.unitPrice,
-        }))
-      );
-      if (itemsError) throw itemsError;
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
 
       clear();
-      setOrderNumber(order_number);
+      setOrderNumber(result.orderNumber);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Something went wrong placing your order."

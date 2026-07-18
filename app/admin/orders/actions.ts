@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { getCachedUser } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import { ORDER_STATUS_LABELS } from "@/lib/orders";
+import { restoreStock } from "@/lib/stock";
 import type { ActionState } from "@/lib/action-state";
 
 type OrderStatus = keyof typeof ORDER_STATUS_LABELS;
@@ -66,10 +67,45 @@ export async function approveOrder(formData: FormData): Promise<ActionState> {
   return transitionOrderStatus(orderId, "approved");
 }
 
+// Rejecting an order releases the stock reservation placeOrder took at
+// checkout (see app/checkout/actions.ts) -- online orders now reserve
+// stock the moment they're placed, not just when approved, so a rejected
+// one has to give that stock back or it's locked away for nothing.
+// Checking the order's status before transitioning (rather than after) is
+// the actual guard against double-restoring if this ever runs twice on
+// the same order: only a genuine awaiting_review -> rejected transition
+// ever had a reservation to release in the first place.
 export async function rejectOrder(formData: FormData): Promise<ActionState> {
   const orderId = formData.get("orderId");
   if (typeof orderId !== "string") return { ok: false, error: "Missing order." };
-  return transitionOrderStatus(orderId, "rejected");
+
+  const session = await getSessionRole();
+  if (session?.role !== "admin") redirect("/admin/login");
+
+  const supabase = createAdminClient();
+  const { data: existing } = await supabase.from("orders").select("status").eq("id", orderId).maybeSingle();
+  const hadReservedStock = existing?.status === "awaiting_review";
+
+  const result = await transitionOrderStatus(orderId, "rejected");
+
+  if (result?.ok && hadReservedStock) {
+    const { data: items, error: itemsError } = await supabase
+      .from("order_items")
+      .select("variant_id, quantity")
+      .eq("order_id", orderId);
+    if (itemsError) {
+      console.error("Failed to load order items for stock restoration:", itemsError);
+    } else {
+      for (const item of items as { variant_id: string | null; quantity: number }[]) {
+        // variant_id is nullable in the schema (order_items can in theory
+        // reference a variant-less product) -- nothing to restore for a
+        // line that never had one.
+        if (item.variant_id) await restoreStock(supabase, item.variant_id, item.quantity);
+      }
+    }
+  }
+
+  return result;
 }
 
 export async function markShipped(formData: FormData): Promise<ActionState> {

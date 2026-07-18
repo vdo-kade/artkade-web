@@ -28,7 +28,7 @@ export default function ProductCard({ product }: { product: Product }) {
 
   return (
     <div
-      className={`group relative bg-white border border-line p-3 pb-5 rotate-[-0.6deg] hover:rotate-0 transition-transform ${
+      className={`group relative min-w-0 bg-white border border-line p-3 pb-5 rotate-[-0.6deg] hover:rotate-0 transition-transform ${
         soldOut ? "opacity-50 grayscale" : ""
       }`}
     >

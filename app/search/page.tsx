@@ -73,7 +73,7 @@ export default async function SearchPage({ searchParams }: { searchParams: { q?:
         {products.length > 0 && (
           <div>
             <h2 className="font-display text-2xl mb-6">Products</h2>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 items-start">
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 items-start overflow-x-hidden">
               {products.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}

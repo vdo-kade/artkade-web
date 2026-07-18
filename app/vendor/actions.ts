@@ -214,10 +214,19 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
     .maybeSingle();
   if (!artist) return { ok: false, error: "Stall not found." };
 
-  const { count } = await supabase
+  // MAX(sort_order)+1, not COUNT(*) -- count isn't stable once a product's
+  // ever been deleted (it drops, so the next create can land back on a
+  // sort_order an existing product already has), which is exactly what
+  // produced real collisions in production (two products tied at the same
+  // sort_order within a stall). Max keeps climbing regardless of deletions.
+  const { data: maxSortRow } = await supabase
     .from("products")
-    .select("id", { count: "exact", head: true })
-    .eq("artist_id", artistId);
+    .select("sort_order")
+    .eq("artist_id", artistId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextSortOrder = (maxSortRow?.sort_order ?? -1) + 1;
 
   let imageUrl: string | null = null;
   if (file instanceof File && file.size > 0) {
@@ -233,7 +242,7 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
       category,
       image_url: imageUrl,
       is_one_off: isOneOff,
-      sort_order: count ?? 0,
+      sort_order: nextSortOrder,
     })
     .select("id")
     .single();

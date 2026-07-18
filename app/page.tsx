@@ -9,6 +9,28 @@ import { LOGO_URL, LOGO_OUTLINE_FILTER_LARGE } from "@/lib/brand";
 
 export const revalidate = 0;
 
+const FEATURED_DROP_TOTAL = 4;
+
+// Takes each active stall's own top products (already ordered by that
+// stall's sort_order) and deals them out round-robin -- one from each
+// stall per pass -- rather than concatenating whole lists, so an active
+// stall with lots of stock can't crowd out one with less just by having
+// more rows in a global sort. A stall short on products simply gets
+// skipped once its list runs out, so remaining slots still fill from
+// whichever stalls have stock left, instead of leaving the section sparse.
+function interleaveFairly<T>(lists: T[][], limit: number): T[] {
+  const result: T[] = [];
+  let i = 0;
+  while (result.length < limit && lists.some((list) => i < list.length)) {
+    for (const list of lists) {
+      if (result.length >= limit) break;
+      if (i < list.length) result.push(list[i]);
+    }
+    i++;
+  }
+  return result;
+}
+
 const STEPS = [
   { n: 1, title: "Fill your bag", body: "Pick prints, stickers and merch from any stall." },
   { n: 2, title: "Choose payment", body: "Bank transfer for now. More methods soon." },
@@ -21,28 +43,37 @@ const STEPS = [
 export default async function LandingPage() {
   const supabase = await createClient();
 
-  const [{ data: artistRows }, { data: productRows }] = await Promise.all([
-    supabase
-      .from("artists")
-      .select("slug, name, tagline, accent_color, is_popup, popup_ends_at")
-      .eq("is_active", true)
-      .order("sort_order"),
-    // Inner-joined against artists.is_active so a product doesn't leak here
-    // just because its own is_active is still true -- an archived (e.g.
-    // expired pop-up) stall's products must vanish from this feed even if
-    // no one has touched the individual product rows. /stalls/[slug] is
-    // already safe on its own: it 404s straight off artists.is_active.
-    supabase
-      .from("products")
-      .select(`${PRODUCT_SELECT}, artists!inner(is_active)`)
-      .eq("is_active", true)
-      .eq("artists.is_active", true)
-      .order("sort_order")
-      .limit(4),
-  ]);
+  const { data: artistRows } = await supabase
+    .from("artists")
+    .select("id, slug, name, tagline, accent_color, is_popup, popup_ends_at")
+    .eq("is_active", true)
+    .order("sort_order");
 
   const STALLS: Stall[] = (artistRows ?? []).map(mapStall);
-  const FEATURED_PRODUCTS: Product[] = (productRows ?? []).map(mapProduct);
+
+  // One query per active stall (rather than one global query ordered by
+  // sort_order) -- a global order-by-sort_order can't tell "this stall's
+  // product #1" from "that stall's product #1", so ties (or one stall
+  // simply having more rows) let a single stall crowd out the rest of the
+  // section entirely. Querying per stall and only ever taking each stall's
+  // own top products guarantees every active stall gets a fair shot at a
+  // slot -- see interleaveFairly, which does the actual balancing below.
+  // Filtering to already-active-only artistRows is what keeps an archived
+  // stall's products out, same guarantee the old artists!inner(is_active)
+  // join gave.
+  const perArtistResults = await Promise.all(
+    (artistRows ?? []).map((a) =>
+      supabase
+        .from("products")
+        .select(PRODUCT_SELECT)
+        .eq("artist_id", a.id)
+        .eq("is_active", true)
+        .order("sort_order")
+        .limit(FEATURED_DROP_TOTAL)
+    )
+  );
+  const perArtistProducts = perArtistResults.map((r) => (r.data ?? []).map(mapProduct));
+  const FEATURED_PRODUCTS: Product[] = interleaveFairly(perArtistProducts, FEATURED_DROP_TOTAL);
 
   const WHEEL_IMAGES: WheelImage[] = FEATURED_PRODUCTS.map((p) => ({
     id: p.id,

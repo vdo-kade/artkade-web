@@ -8,6 +8,17 @@ export const LOGO_URL =
 export const SHORT_LOGO_URL =
   "https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/Site_assets/Logo%20Short%20on%20trans.png";
 
+// Open Graph share image (app/layout.tsx's metadata) -- a static 1200x630
+// render of the same cream background + LOGO_OUTLINE_FILTER_LARGE
+// treatment as the homepage hero, generated via a real browser (so the
+// drop-shadow stack matches exactly) rather than reimplemented in a
+// different image pipeline. Static, not per-page dynamic: nothing here
+// changes per product/stall, so one shared image covers every link.
+export const OG_IMAGE_URL =
+  "https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/Site_assets/og-image.png";
+
+export const SITE_URL = "https://artkade.space";
+
 // Both logo assets' neutral element (the triangle-eye mark / "ART"
 // wordmark) is pure white -- ~1.1:1 contrast against this site's cream
 // (#F5EFE4), effectively invisible on its own (confirmed via computed-style

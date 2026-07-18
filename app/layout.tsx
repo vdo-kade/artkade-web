@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Work_Sans, IBM_Plex_Mono } from "next/font/google";
 import { BagProvider } from "@/components/BagProvider";
+import { OG_IMAGE_URL, SITE_URL } from "@/lib/brand";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -19,10 +20,35 @@ const plexMono = IBM_Plex_Mono({
   weight: ["400", "500"],
 });
 
+const SITE_TITLE = "Art Kade: a curated Sri Lankan creative marketplace";
+const SITE_DESCRIPTION =
+  "Kade means shop. Art Kade is where Vdokade, Nuwan Shilpa and future artists release limited-drop prints, stickers and merch.";
+
+// Site-wide default -- every page inherits this unless it sets its own
+// `metadata` export (none currently do). This is also what a link-preview
+// crawler (WhatsApp, Facebook, etc) sees even for a bare "/" link: the
+// site-wide gate (middleware.ts) redirects an anonymous request to /gate,
+// but /gate is wrapped by this same root layout, so the branded OG tags
+// still render there rather than the crawler landing on nothing.
 export const metadata: Metadata = {
-  title: "Art Kade: a curated Sri Lankan creative marketplace",
-  description:
-    "Kade means shop. Art Kade is where Vdokade, Nuwan Shilpa and future artists release limited-drop prints, stickers and merch.",
+  metadataBase: new URL(SITE_URL),
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  openGraph: {
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    siteName: "Art Kade",
+    images: [{ url: OG_IMAGE_URL, width: 1200, height: 630, alt: "Art Kade" }],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [OG_IMAGE_URL],
+  },
 };
 
 // viewportFit: "cover" is what makes the page extend the full physical

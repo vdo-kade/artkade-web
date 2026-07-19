@@ -7,6 +7,7 @@ import { getCachedUser } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import { ORDER_STATUS_LABELS } from "@/lib/orders";
 import { restoreStock } from "@/lib/stock";
+import { sendOrderApprovedEmail, sendOrderRejectedEmail } from "@/lib/email";
 import type { ActionState } from "@/lib/action-state";
 
 type OrderStatus = keyof typeof ORDER_STATUS_LABELS;
@@ -61,10 +62,36 @@ async function transitionOrderStatus(orderId: string, status: OrderStatus): Prom
   return { ok: true };
 }
 
+// Sends the "Confirmation email" the homepage's own "how it works" section
+// already promises (app/page.tsx's STEPS: "You'll get an email once it's
+// approved") -- fire-and-log, not fire-and-fail: an email hiccup shouldn't
+// turn a real, successful approval into an error response for the admin,
+// same reasoning as order_status_history's own insert above.
 export async function approveOrder(formData: FormData): Promise<ActionState> {
   const orderId = formData.get("orderId");
   if (typeof orderId !== "string") return { ok: false, error: "Missing order." };
-  return transitionOrderStatus(orderId, "approved");
+
+  const session = await getSessionRole();
+  if (session?.role !== "admin") redirect("/admin/login");
+
+  const supabase = createAdminClient();
+  const { data: order } = await supabase
+    .from("orders")
+    .select("order_number, customer_email")
+    .eq("id", orderId)
+    .maybeSingle();
+
+  const result = await transitionOrderStatus(orderId, "approved");
+
+  if (result?.ok && order) {
+    try {
+      await sendOrderApprovedEmail({ to: order.customer_email, orderNumber: order.order_number });
+    } catch (err) {
+      console.error("Failed to send order-approved email:", err);
+    }
+  }
+
+  return result;
 }
 
 // Rejecting an order releases the stock reservation placeOrder took at
@@ -75,6 +102,9 @@ export async function approveOrder(formData: FormData): Promise<ActionState> {
 // the actual guard against double-restoring if this ever runs twice on
 // the same order: only a genuine awaiting_review -> rejected transition
 // ever had a reservation to release in the first place.
+//
+// Also sends the rejection email -- fire-and-log like approveOrder's, not
+// fire-and-fail.
 export async function rejectOrder(formData: FormData): Promise<ActionState> {
   const orderId = formData.get("orderId");
   if (typeof orderId !== "string") return { ok: false, error: "Missing order." };
@@ -83,7 +113,11 @@ export async function rejectOrder(formData: FormData): Promise<ActionState> {
   if (session?.role !== "admin") redirect("/admin/login");
 
   const supabase = createAdminClient();
-  const { data: existing } = await supabase.from("orders").select("status").eq("id", orderId).maybeSingle();
+  const { data: existing } = await supabase
+    .from("orders")
+    .select("status, order_number, customer_email")
+    .eq("id", orderId)
+    .maybeSingle();
   const hadReservedStock = existing?.status === "awaiting_review";
 
   const result = await transitionOrderStatus(orderId, "rejected");
@@ -102,6 +136,14 @@ export async function rejectOrder(formData: FormData): Promise<ActionState> {
         // line that never had one.
         if (item.variant_id) await restoreStock(supabase, item.variant_id, item.quantity);
       }
+    }
+  }
+
+  if (result?.ok && existing) {
+    try {
+      await sendOrderRejectedEmail({ to: existing.customer_email, orderNumber: existing.order_number });
+    } catch (err) {
+      console.error("Failed to send order-rejected email:", err);
     }
   }
 

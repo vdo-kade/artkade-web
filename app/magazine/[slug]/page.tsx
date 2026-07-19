@@ -56,6 +56,7 @@ export default async function MagazinePostPage({ params }: { params: { slug: str
             <ExpandableImage
               images={[{ src: post.hero_image_url, alt: post.title }]}
               frameClassName="bg-paper flex items-center justify-center overflow-hidden"
+              sizes="(min-width: 768px) 720px, 100vw"
             />
           </div>
         )}

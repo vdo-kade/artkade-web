@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { FREEBIE_CATEGORY_LABELS, previewKindForCategory, type Freebie } from "@/lib/freebies";
 
 // No bag/checkout involvement at all here, unlike ProductCard -- every
@@ -19,8 +20,16 @@ export default function FreebieCard({ freebie }: { freebie: Freebie }) {
     <div className="bg-white border border-line p-3 pb-4">
       <div className="bg-paper min-h-[8rem] flex items-center justify-center overflow-hidden">
         {previewImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewImage} alt={freebie.title} className="block w-full h-auto" />
+          // Placeholder intrinsic size, same reasoning as ExpandableImage --
+          // h-auto means real layout follows the actual loaded image.
+          <Image
+            src={previewImage}
+            alt={freebie.title}
+            width={1200}
+            height={1500}
+            sizes="(min-width: 1024px) 260px, (min-width: 640px) 45vw, 90vw"
+            className="block w-full h-auto"
+          />
         ) : (
           <span className="text-warm-grey text-xs font-mono uppercase">
             {kind === "pdf" ? "PDF" : kind === "audio" ? "Audio" : "File"}

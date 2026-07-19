@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { createClient } from "@/lib/supabase-server";
 import { LOGO_URL, LOGO_OUTLINE_FILTER_LARGE } from "@/lib/brand";
 import { ActionForm } from "@/components/ActionForm";
@@ -32,9 +33,13 @@ export default async function GatePage() {
       <div aria-hidden className="absolute inset-0 bg-cream/75" />
 
       <div className="relative z-10 w-full max-w-md text-center">
-        <img
+        <Image
           src={LOGO_URL}
           alt="Art Kade"
+          width={1555}
+          height={497}
+          sizes="(min-width: 640px) 350px, 250px"
+          priority
           className="mx-auto h-20 sm:h-28 w-auto mb-8"
           style={{ filter: LOGO_OUTLINE_FILTER_LARGE }}
         />

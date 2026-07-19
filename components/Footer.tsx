@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase";
 import { SHORT_LOGO_URL, LOGO_OUTLINE_FILTER_SMALL } from "@/lib/brand";
 
@@ -58,9 +59,12 @@ export default function Footer() {
               the header's small mark (see components/Header.tsx) -- the
               footer sits on the same cream background, so it reuses the
               "small" filter rather than the hero's heavier one. */}
-          <img
+          <Image
             src={SHORT_LOGO_URL}
             alt="Art Kade"
+            width={812}
+            height={712}
+            sizes="48px"
             className="h-9 w-auto"
             style={{ filter: LOGO_OUTLINE_FILTER_SMALL }}
           />

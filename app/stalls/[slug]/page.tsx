@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ProductCard, { Product } from "@/components/ProductCard";
@@ -54,10 +55,12 @@ export default async function StallPage({ params }: { params: { slug: string } }
         )}
         <div className="relative mx-auto max-w-3xl">
           {artist.logo_url && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={artist.logo_url}
               alt={`${artist.name} logo`}
+              width={128}
+              height={128}
+              sizes="64px"
               className="mx-auto mb-4 h-16 w-16 rounded-full border border-line bg-white object-cover"
             />
           )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 
 export type PolaroidImage = { src: string; alt: string };
 
@@ -95,13 +96,13 @@ function PolaroidSlot({
           a fixed-ratio crop is the actual reference aesthetic here. */}
       <div className="relative w-full" style={{ aspectRatio: "1 / 1" }}>
         {images.map((img, i) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             key={img.src}
             src={img.src}
             alt=""
-            loading="lazy"
-            className="absolute inset-0 w-full h-full object-cover ease-in-out"
+            fill
+            sizes="150px"
+            className="object-cover ease-in-out"
             style={{
               opacity: i === index ? 1 : 0,
               filter: i === index ? "blur(0px)" : "blur(10px)",

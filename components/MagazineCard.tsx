@@ -22,6 +22,11 @@ export default function MagazineCard({ post, featured = false }: { post: Magazin
           images={post.heroImageUrl ? [{ src: post.heroImageUrl, alt: post.title }] : []}
           frameClassName="bg-paper min-h-[10rem] flex items-center justify-center overflow-hidden"
           placeholder={<span className="text-warm-grey text-xs font-mono">photo coming soon</span>}
+          sizes={
+            featured
+              ? "(min-width: 1200px) 1152px, 100vw"
+              : "(min-width: 1024px) 360px, (min-width: 640px) 48vw, 90vw"
+          }
         />
       </div>
 

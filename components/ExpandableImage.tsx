@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 
 export type ExpandableImageItem = { src: string; alt: string };
 
@@ -11,6 +12,17 @@ export type ExpandableImageItem = { src: string; alt: string };
 // always shown at its own natural aspect ratio (w-full h-auto, never
 // object-cover); "frameClassName" only controls the polaroid chrome
 // (background/border/padding) around it, never the crop.
+//
+// The 1200x1500 width/height passed to next/image below is a placeholder
+// intrinsic size, not each image's real one -- every product/magazine photo
+// has its own real (and varying) aspect ratio, and next/image requires a
+// concrete width+height (or `fill`) up front. Per the CSS/HTML spec, an
+// <img> with both a CSS width AND height of "auto" (thumbnail: w-full
+// h-auto; lightbox: w-auto h-auto) ignores the width/height attributes for
+// layout entirely and sizes itself from the actual loaded bitmap once it
+// arrives -- so the placeholder ratio never causes stretching or cropping,
+// it only feeds next/image's srcset math (via `sizes`) for which
+// resolution to request.
 //
 // `images` takes an array so a caller with more than one image/design gets
 // a swipeable/arrow slideshow in the lightbox for free -- today every
@@ -22,11 +34,13 @@ export default function ExpandableImage({
   className,
   frameClassName,
   placeholder,
+  sizes = "(min-width: 1024px) 260px, (min-width: 640px) 45vw, 90vw",
 }: {
   images: ExpandableImageItem[];
   className?: string;
   frameClassName?: string;
   placeholder?: ReactNode;
+  sizes?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
@@ -89,8 +103,14 @@ export default function ExpandableImage({
         aria-label={`View ${images[0].alt} full size`}
         className={`block w-full text-left cursor-zoom-in ${frameClassName ?? ""}`}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={images[0].src} alt={images[0].alt} loading="lazy" className={`block w-full h-auto ${className ?? ""}`} />
+        <Image
+          src={images[0].src}
+          alt={images[0].alt}
+          width={1200}
+          height={1500}
+          sizes={sizes}
+          className={`block w-full h-auto ${className ?? ""}`}
+        />
       </button>
 
       {open &&
@@ -131,10 +151,12 @@ export default function ExpandableImage({
               </button>
             )}
 
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={images[index].src}
               alt={images[index].alt}
+              width={1200}
+              height={1500}
+              sizes="90vw"
               className="max-w-[90vw] max-h-[85vh] w-auto h-auto object-contain select-none"
               onClick={(e) => e.stopPropagation()}
               onTouchStart={onTouchStart}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 
 export type WheelImage = {
   id: string;
@@ -53,15 +54,14 @@ export default function StickerWheel({ images }: { images: WheelImage[] }) {
         return (
           <div
             key={img.id}
-            className="rounded-full overflow-hidden border-2 border-white shadow-md transition-all duration-300 ease-out"
+            className="relative rounded-full overflow-hidden border-2 border-white shadow-md transition-all duration-300 ease-out"
             style={{
               width: 104 * scale,
               height: 104 * scale,
               opacity,
             }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={img.imageUrl} alt={img.label} className="w-full h-full object-cover" />
+            <Image src={img.imageUrl} alt={img.label} fill sizes="104px" className="object-cover" />
           </div>
         );
       })}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import Image from "next/image";
 import { useBag } from "./BagProvider";
 import SearchForm from "./SearchForm";
 import { SHORT_LOGO_URL, LOGO_OUTLINE_FILTER_SMALL } from "@/lib/brand";
@@ -48,9 +49,13 @@ export default function Header() {
             this site's default body-text-on-cream colour) plus one larger
             soft shadow underneath for depth -- see lib/brand.ts.
           */}
-          <img
+          <Image
             src={SHORT_LOGO_URL}
             alt="Art Kade"
+            width={812}
+            height={712}
+            sizes="48px"
+            priority
             className="h-9 w-auto"
             style={{ filter: LOGO_OUTLINE_FILTER_SMALL }}
           />

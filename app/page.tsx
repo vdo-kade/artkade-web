@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import StallCard, { Stall } from "@/components/StallCard";
@@ -98,10 +99,13 @@ export default async function LandingPage() {
           gold-fill version only existed to stand out against a dark
           section that's no longer here. */}
       <section className="mx-auto max-w-6xl px-6 pt-20 pb-24 text-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={LOGO_URL}
           alt="Art Kade"
+          width={1555}
+          height={497}
+          sizes="(min-width: 768px) 501px, (min-width: 640px) 400px, 300px"
+          priority
           className="mx-auto h-24 sm:h-32 md:h-40 w-auto mb-8"
           style={{ filter: LOGO_OUTLINE_FILTER_LARGE }}
         />

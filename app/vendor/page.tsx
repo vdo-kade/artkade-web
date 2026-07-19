@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getCachedUser } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
@@ -501,11 +502,13 @@ export default async function VendorDashboardPage({
               </div>
 
               {product.image_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <Image
                   src={product.image_url}
                   alt={product.name}
-                  style={{ maxWidth: 120, maxHeight: 120, margin: "8px 0", border: "1px solid #ccc" }}
+                  width={480}
+                  height={480}
+                  sizes="120px"
+                  style={{ width: "auto", height: "auto", maxWidth: 120, maxHeight: 120, margin: "8px 0", border: "1px solid #ccc" }}
                 />
               )}
 
@@ -643,11 +646,13 @@ export default async function VendorDashboardPage({
                   </div>
                   {f.description && <p style={{ fontSize: 13, color: "#666", margin: "4px 0" }}>{f.description}</p>}
                   {f.thumbnail_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={f.thumbnail_url}
                       alt={f.title}
-                      style={{ maxWidth: 100, maxHeight: 100, margin: "8px 0", border: "1px solid #ccc" }}
+                      width={400}
+                      height={400}
+                      sizes="100px"
+                      style={{ width: "auto", height: "auto", maxWidth: 100, maxHeight: 100, margin: "8px 0", border: "1px solid #ccc" }}
                     />
                   )}
                   <p style={{ fontSize: 12, margin: "4px 0" }}>
@@ -774,11 +779,13 @@ function PhotoUploader({
     <div style={{ flex: 1 }}>
       <p style={{ fontSize: 13, marginBottom: 6 }}>{label}</p>
       {currentUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <Image
           src={currentUrl}
           alt={label}
-          style={{ maxWidth: "100%", maxHeight: 120, marginBottom: 8, border: "1px solid #ccc" }}
+          width={480}
+          height={480}
+          sizes="300px"
+          style={{ width: "auto", height: "auto", maxWidth: "100%", maxHeight: 120, marginBottom: 8, border: "1px solid #ccc" }}
         />
       ) : (
         <p style={{ fontSize: 12, color: "#999", marginBottom: 8 }}>No {label.toLowerCase()} yet.</p>

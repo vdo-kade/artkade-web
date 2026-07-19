@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getSessionRole } from "@/lib/session-role";
 import AdminNav from "@/components/AdminNav";
@@ -131,11 +132,13 @@ export default async function AdminMagazinePage() {
             </div>
 
             {post.hero_image_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={post.hero_image_url}
                 alt={post.title}
-                style={{ maxWidth: 160, maxHeight: 100, margin: "8px 0", border: "1px solid #ccc" }}
+                width={640}
+                height={400}
+                sizes="160px"
+                style={{ width: "auto", height: "auto", maxWidth: 160, maxHeight: 100, margin: "8px 0", border: "1px solid #ccc" }}
               />
             )}
 

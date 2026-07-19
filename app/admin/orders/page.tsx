@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Image from "next/image";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getCachedUser } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
@@ -102,11 +103,13 @@ function ProofPreview({ order }: { order: OrderWithProof }) {
   }
   return (
     <a href={order.proofUrl} target="_blank" rel="noopener noreferrer">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src={order.proofUrl}
         alt="Payment proof"
-        style={{ maxWidth: 200, maxHeight: 200, border: "1px solid #ccc" }}
+        width={800}
+        height={800}
+        sizes="200px"
+        style={{ width: "auto", height: "auto", maxWidth: 200, maxHeight: 200, border: "1px solid #ccc" }}
       />
     </a>
   );

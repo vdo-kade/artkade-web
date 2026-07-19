@@ -38,6 +38,9 @@ export default function AdminNav({ role }: { role: "admin" | "vendor" }) {
           <Link href="/admin/magazine" style={linkStyle}>
             Magazine
           </Link>
+          <Link href="/admin/beta-signups" style={linkStyle}>
+            Beta signups
+          </Link>
           <Link href="/admin/vendors/new" style={linkStyle}>
             Add vendor
           </Link>

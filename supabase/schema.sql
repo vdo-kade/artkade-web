@@ -27,6 +27,13 @@ create table artists (
   popup_ends_at timestamptz,
   is_active boolean not null default true, -- dashboard on/off switch for the whole stall
   sort_order int not null default 0,
+  -- Sitewide footer's "Follow along" block (components/Footer.tsx): a real
+  -- per-stall flag, not a hardcoded list, so a new/future vendor defaults
+  -- to excluded and can be opted in later purely as a data change. socials
+  -- is [{ "label": "Instagram", "url": "https://..." }, ...] so a whole new
+  -- vendor's links are also data, not a code change.
+  show_socials_in_footer boolean not null default false,
+  socials jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now()
 );
 

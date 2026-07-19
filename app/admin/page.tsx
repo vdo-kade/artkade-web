@@ -170,6 +170,7 @@ export default async function GodDashboardPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "#666" }}>
           <Link href="/admin/orders">Orders &rarr;</Link>
           <Link href="/admin/magazine">Magazine &rarr;</Link>
+          <Link href="/admin/beta-signups">Beta signups &rarr;</Link>
           <form action={logout}>
             <button type="submit" style={{ padding: "4px 10px", fontSize: 13 }}>
               Log out

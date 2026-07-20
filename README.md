@@ -93,3 +93,51 @@ Then open http://localhost:3000
 
 Take this repo into **Claude Code** to keep going — it's built for exactly
 this kind of ongoing, multi-file project.
+
+## Backups
+
+Supabase's free tier has no automatic backups, so `app/api/cron/backup-tables`
+runs weekly (Sunday, 4am UTC — a low-traffic window, see `vercel.json`) and
+exports every row of the tables that would actually hurt to lose —
+`artists`, `products`, `product_variants`, `orders`, `order_items`,
+`order_status_history` — into a single timestamped JSON file in the
+private `backups` Storage bucket (`lib/backup.ts`). It's a lightweight
+stand-in, **not a `pg_dump` replacement**: no schema, no RLS policies, no
+Storage objects themselves (product photos, payment-proof screenshots),
+just row data for those six tables. Protected by the same `CRON_SECRET`
+Bearer-token check as the other cron routes.
+
+**To trigger one manually** (e.g. before a risky manual DB change):
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://artkade.space/api/cron/backup-tables
+```
+
+**To download a backup**: Supabase dashboard → Storage → `backups` bucket
+→ pick a file → Download. It's a private bucket, so this only works from
+the dashboard (logged in as the project owner) or with the service-role
+key — there's no public URL.
+
+**To restore from one, if it's ever actually needed:**
+
+1. Download the backup JSON you want (see above) and open it — it's
+   `{ exportedAt, tables: { artists: [...], products: [...], ... } }`.
+2. Restore tables in FK order so references resolve: `artists` →
+   `products` → `product_variants`, then separately `orders` →
+   `order_items` → `order_status_history`.
+3. For a full-table restore, the Supabase SQL Editor's `insert into ... 
+   select * from jsonb_to_recordset('<paste the table's array here>') as
+   t(...)` pattern works for one table at a time (match the column list to
+   that table's shape in `supabase/schema.sql`). For recovering a handful
+   of specific rows (e.g. one accidentally-deleted order), it's usually
+   faster to just paste the relevant JSON object(s) into the Table
+   Editor's row-insert UI by hand.
+4. `id` columns are real UUIDs from the original data, not regenerated —
+   inserting them back with the same `id` is what keeps foreign keys
+   (`order_items.order_id`, etc) intact across a restore.
+5. There's no automatic pruning of old backups — they accumulate in the
+   bucket indefinitely. Deliberate: auto-deleting backups is its own risk
+   (the one good backup you need might be older than a naive retention
+   window), and at one small JSON export a week this isn't a meaningful
+   storage cost. Worth revisiting manually if the bucket ever grows large
+   enough to matter.

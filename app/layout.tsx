@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Work_Sans, IBM_Plex_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { BagProvider } from "@/components/BagProvider";
 import { OG_IMAGE_URL, SITE_URL } from "@/lib/brand";
 import "./globals.css";
@@ -77,6 +78,11 @@ export default function RootLayout({
         className={`${fraunces.variable} ${workSans.variable} ${plexMono.variable} font-body bg-cream text-ink`}
       >
         <BagProvider>{children}</BagProvider>
+        {/* Vercel's free Web Analytics -- no-cost pageview/visitor counts,
+            not the paid "Analytics Plus" tier. Still needs "Enable" clicked
+            once in the Vercel dashboard's Project -> Analytics tab; this
+            script is a no-op until that's done. */}
+        <Analytics />
       </body>
     </html>
   );

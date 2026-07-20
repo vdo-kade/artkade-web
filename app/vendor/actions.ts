@@ -9,6 +9,7 @@ import { CATEGORY_ORDER } from "@/lib/catalogue";
 import { defaultWeightGrams } from "@/lib/shipping";
 import { FREEBIE_CATEGORY_ORDER } from "@/lib/freebies";
 import { uploadStallPhotoFile, uploadFreebieFile, type PhotoField } from "@/lib/storage";
+import { validateUpload } from "@/lib/image-validation";
 import { runPopupLifecycleTick } from "@/lib/popup-expiry";
 import type { ActionState } from "@/lib/action-state";
 
@@ -118,12 +119,12 @@ export async function uploadStallPhoto(formData: FormData): Promise<ActionState>
     .maybeSingle();
   if (!artist) return { ok: false, error: "Stall not found." };
 
-  const publicUrl = await uploadStallPhotoFile(supabase, artist.slug, field as PhotoField, file);
-  if (!publicUrl) return { ok: false, error: "Upload failed. Check server logs." };
+  const uploaded = await uploadStallPhotoFile(supabase, artist.slug, field as PhotoField, file);
+  if (!uploaded.ok) return { ok: false, error: uploaded.error };
 
   const { error } = await supabase
     .from("artists")
-    .update({ [field as PhotoField]: publicUrl })
+    .update({ [field as PhotoField]: uploaded.url })
     .eq("id", artistId);
   if (error) {
     console.error("Failed to save uploaded photo URL:", error);
@@ -139,28 +140,31 @@ export async function uploadStallPhoto(formData: FormData): Promise<ActionState>
 // print sizes, and tee sizes -- see supabase/schema.sql).
 const MAX_VARIANT_ROWS = 4;
 
+// Same real magic-byte + size-cap validation as payment proof (see
+// lib/image-validation.ts) rather than trusting file.type -- product photos
+// are meant to always be real images.
 async function uploadProductPhoto(
   supabase: ReturnType<typeof createAdminClient>,
   artistSlug: string,
   file: File
-): Promise<string | null> {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "png";
-  const path = `products/${artistSlug}/${Date.now()}.${ext}`;
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const validated = await validateUpload(file, "image");
+  if (!validated.ok) return validated;
+
+  const path = `products/${artistSlug}/${Date.now()}.${validated.ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from("media")
-    .upload(path, await file.arrayBuffer(), {
-      contentType: file.type || "application/octet-stream",
-    });
+    .upload(path, validated.bytes, { contentType: validated.mime });
   if (uploadError) {
     console.error("Product photo upload failed:", uploadError);
-    return null;
+    return { ok: false, error: "Upload failed. Check server logs." };
   }
 
   const {
     data: { publicUrl },
   } = supabase.storage.from("media").getPublicUrl(path);
-  return publicUrl;
+  return { ok: true, url: publicUrl };
 }
 
 export async function createProduct(formData: FormData): Promise<ActionState> {
@@ -231,7 +235,9 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
 
   let imageUrl: string | null = null;
   if (file instanceof File && file.size > 0) {
-    imageUrl = await uploadProductPhoto(supabase, artist.slug, file);
+    const uploaded = await uploadProductPhoto(supabase, artist.slug, file);
+    if (!uploaded.ok) return { ok: false, error: uploaded.error };
+    imageUrl = uploaded.url;
   }
 
   const { data: product, error } = await supabase
@@ -313,7 +319,8 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   let imageUrl: string | undefined;
   if (file instanceof File && file.size > 0) {
     const uploaded = await uploadProductPhoto(supabase, existing.artists.slug, file);
-    if (uploaded) imageUrl = uploaded;
+    if (!uploaded.ok) return { ok: false, error: uploaded.error };
+    imageUrl = uploaded.url;
   }
 
   const { error } = await supabase
@@ -438,12 +445,14 @@ export async function createFreebie(formData: FormData): Promise<ActionState> {
     .maybeSingle();
   if (!artist) return { ok: false, error: "Stall not found." };
 
-  const fileUrl = await uploadFreebieFile(supabase, artist.slug, "file", file);
-  if (!fileUrl) return { ok: false, error: "File upload failed. Check server logs." };
+  const uploadedFile = await uploadFreebieFile(supabase, artist.slug, "file", file);
+  if (!uploadedFile.ok) return { ok: false, error: uploadedFile.error };
 
   let thumbnailUrl: string | null = null;
   if (thumbnail instanceof File && thumbnail.size > 0) {
-    thumbnailUrl = await uploadFreebieFile(supabase, artist.slug, "thumbnail", thumbnail);
+    const uploadedThumbnail = await uploadFreebieFile(supabase, artist.slug, "thumbnail", thumbnail);
+    if (!uploadedThumbnail.ok) return { ok: false, error: uploadedThumbnail.error };
+    thumbnailUrl = uploadedThumbnail.url;
   }
 
   const { error } = await supabase.from("freebies").insert({
@@ -451,7 +460,7 @@ export async function createFreebie(formData: FormData): Promise<ActionState> {
     title: title.trim(),
     description: typeof description === "string" && description.trim() ? description.trim() : null,
     category,
-    file_url: fileUrl,
+    file_url: uploadedFile.url,
     thumbnail_url: thumbnailUrl,
   });
   if (error) {

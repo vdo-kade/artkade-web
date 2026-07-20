@@ -1,4 +1,7 @@
 import type { createAdminClient } from "./supabase-admin";
+import { validateUpload } from "./image-validation";
+
+export type StorageUploadResult = { ok: true; url: string } | { ok: false; error: string };
 
 // Payment proof paths are client-submitted to placeOrder (see
 // app/checkout/actions.ts) after a separate upload call to
@@ -40,57 +43,63 @@ const PHOTO_FIELDS = ["logo_url", "hero_image_url"] as const;
 export type PhotoField = (typeof PHOTO_FIELDS)[number];
 
 // Freebies can be any file type (audio, PDF, image, etc), unlike the
-// image-only uploads above -- content type is passed straight through
-// from the browser File rather than assumed.
+// image-only uploads below -- "file" is sniffed against the wider freebie
+// allowlist (see lib/image-validation.ts), "thumbnail" is always a real
+// image. Either way, the byte signature actually found is what's stored as
+// the content type, not whatever label the browser's File.type sent --
+// same reasoning as /api/upload-payment-proof, now applied here too instead
+// of trusting the client's claim.
 export async function uploadFreebieFile(
   supabase: ReturnType<typeof createAdminClient>,
   slug: string,
   kind: "file" | "thumbnail",
   file: File
-): Promise<string | null> {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
-  const path = `freebies/${slug}/${kind}-${Date.now()}.${ext}`;
+): Promise<StorageUploadResult> {
+  const validated = await validateUpload(file, kind === "thumbnail" ? "image" : "freebie");
+  if (!validated.ok) return validated;
+
+  const path = `freebies/${slug}/${kind}-${Date.now()}.${validated.ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from("media")
-    .upload(path, await file.arrayBuffer(), {
-      contentType: file.type || "application/octet-stream",
-    });
+    .upload(path, validated.bytes, { contentType: validated.mime });
   if (uploadError) {
     console.error("Freebie file upload failed:", uploadError);
-    return null;
+    return { ok: false, error: "Upload failed. Check server logs." };
   }
 
   const {
     data: { publicUrl },
   } = supabase.storage.from("media").getPublicUrl(path);
-  return publicUrl;
+  return { ok: true, url: publicUrl };
 }
 
 // Shared by app/vendor/actions.ts's uploadStallPhoto (existing stalls) and
 // the pop-up vendor creation route (brand new stalls) -- same bucket, same
-// stalls/<slug>/<field>-<timestamp>.<ext> path convention either way.
+// stalls/<slug>/<field>-<timestamp>.<ext> path convention either way. Same
+// real magic-byte + size-cap validation as payment proof (see
+// lib/image-validation.ts) -- these are meant to always be real photos.
 export async function uploadStallPhotoFile(
   supabase: ReturnType<typeof createAdminClient>,
   slug: string,
   field: PhotoField,
   file: File
-): Promise<string | null> {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "png";
-  const path = `stalls/${slug}/${field}-${Date.now()}.${ext}`;
+): Promise<StorageUploadResult> {
+  const validated = await validateUpload(file, "image");
+  if (!validated.ok) return validated;
+
+  const path = `stalls/${slug}/${field}-${Date.now()}.${validated.ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from("media")
-    .upload(path, await file.arrayBuffer(), {
-      contentType: file.type || "application/octet-stream",
-    });
+    .upload(path, validated.bytes, { contentType: validated.mime });
   if (uploadError) {
     console.error("Stall photo upload failed:", uploadError);
-    return null;
+    return { ok: false, error: "Upload failed. Check server logs." };
   }
 
   const {
     data: { publicUrl },
   } = supabase.storage.from("media").getPublicUrl(path);
-  return publicUrl;
+  return { ok: true, url: publicUrl };
 }

@@ -88,12 +88,14 @@ export async function POST(req: NextRequest) {
 
     const photoUpdates: Record<string, string> = {};
     if (logo instanceof File && logo.size > 0) {
-      const url = await uploadStallPhotoFile(supabase, artist.slug, "logo_url", logo);
-      if (url) photoUpdates.logo_url = url;
+      const uploaded = await uploadStallPhotoFile(supabase, artist.slug, "logo_url", logo);
+      if (uploaded.ok) photoUpdates.logo_url = uploaded.url;
+      else console.error("Pop-up vendor logo upload failed:", uploaded.error);
     }
     if (hero instanceof File && hero.size > 0) {
-      const url = await uploadStallPhotoFile(supabase, artist.slug, "hero_image_url", hero);
-      if (url) photoUpdates.hero_image_url = url;
+      const uploaded = await uploadStallPhotoFile(supabase, artist.slug, "hero_image_url", hero);
+      if (uploaded.ok) photoUpdates.hero_image_url = uploaded.url;
+      else console.error("Pop-up vendor hero image upload failed:", uploaded.error);
     }
     if (Object.keys(photoUpdates).length > 0) {
       await supabase.from("artists").update(photoUpdates).eq("id", artist.id);

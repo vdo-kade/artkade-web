@@ -1,6 +1,26 @@
 import { Resend } from "resend";
 import { SITE_URL } from "./brand";
 
+// Every value interpolated into an email's HTML body below is either
+// customer-submitted (customerName) or otherwise not guaranteed safe by the
+// time it reaches here (order numbers are regex-constrained before use, but
+// escaping them too costs nothing and means this file never has an
+// unescaped interpolation to slip up on later) -- run through this before
+// it touches wrapEmailHtml's template strings. Single-pass regex + map
+// rather than chained .replace calls, so earlier replacements can't get
+// re-matched and double-escaped by a later one.
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+function escapeHtml(input: string): string {
+  return input.replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
+}
+
 // Lazily constructed rather than at module load -- mirrors
 // createAdminClient()'s pattern of only failing when actually used, not on
 // import, so a missing key doesn't crash every page that happens to import
@@ -57,10 +77,11 @@ export async function sendOrderApprovedEmail(params: { to: string; orderNumber: 
   // guesser anything they couldn't already read straight out of this
   // email (the order number is already in the subject and body above).
   const trackUrl = `${SITE_URL}/track?order=${encodeURIComponent(params.orderNumber)}`;
+  const orderNumber = escapeHtml(params.orderNumber);
 
   const html = wrapEmailHtml(`
     <h1 style="font-size:22px; margin:0 0 16px; font-weight:600;">Your order is confirmed</h1>
-    <p style="margin:0 0 12px; line-height:1.5;">We've checked your payment for order <strong>${params.orderNumber}</strong> and it's approved.</p>
+    <p style="margin:0 0 12px; line-height:1.5;">We've checked your payment for order <strong>${orderNumber}</strong> and it's approved.</p>
     <p style="margin:0 0 12px; line-height:1.5;">Next up: we'll pack and post it within the week.</p>
     <a href="${trackUrl}" style="display:inline-block; background:#1C1712; color:#FFFDF8; padding:10px 20px; text-decoration:none; font-size:14px; margin-top:8px;">Track your order &rarr;</a>
     <p style="margin:24px 0 0; color:#8B8175; font-size:13px;">Thanks for shopping at Art Kade.</p>
@@ -93,9 +114,11 @@ export async function sendOrderRejectedEmail(params: { to: string; orderNumber: 
     return;
   }
 
+  const orderNumber = escapeHtml(params.orderNumber);
+
   const html = wrapEmailHtml(`
     <h1 style="font-size:22px; margin:0 0 16px; font-weight:600;">We couldn't confirm your order</h1>
-    <p style="margin:0 0 12px; line-height:1.5;">We weren't able to verify the payment for order <strong>${params.orderNumber}</strong>, so it hasn't gone through.</p>
+    <p style="margin:0 0 12px; line-height:1.5;">We weren't able to verify the payment for order <strong>${orderNumber}</strong>, so it hasn't gone through.</p>
     <p style="margin:0 0 12px; line-height:1.5;">If you think this is a mistake, just reply to this email and we'll sort it out.</p>
   `);
   const text = `We couldn't confirm your order.
@@ -133,13 +156,27 @@ export async function sendAdminNewOrderNotification(params: {
   }
 
   const adminOrdersUrl = `${SITE_URL}/admin/orders`;
+  // Plain-text itemLines for the text part below; the html part builds its
+  // own HTML-escaped copy separately so the plain-text email never shows
+  // literal &amp;-style entities.
   const itemLines = params.items.map((i) => `${i.name} (${i.variantLabel}) x${i.quantity}`);
 
+  // orderNumber is regex-constrained before it ever reaches here, but
+  // customerName and the item name/variant label are not (customerName is
+  // straight from the checkout form; item name/label come from the vendor's
+  // own catalogue entries) -- escape everything interpolated below rather
+  // than special-case which fields are "safe enough" today.
+  const orderNumber = escapeHtml(params.orderNumber);
+  const customerName = escapeHtml(params.customerName);
+  const escapedItemLines = params.items.map(
+    (i) => `${escapeHtml(i.name)} (${escapeHtml(i.variantLabel)}) x${i.quantity}`
+  );
+
   const html = wrapEmailHtml(`
-    <h1 style="font-size:22px; margin:0 0 16px; font-weight:600;">New order: ${params.orderNumber}</h1>
-    <p style="margin:0 0 12px; line-height:1.5;"><strong>${params.customerName}</strong> just placed an order.</p>
+    <h1 style="font-size:22px; margin:0 0 16px; font-weight:600;">New order: ${orderNumber}</h1>
+    <p style="margin:0 0 12px; line-height:1.5;"><strong>${customerName}</strong> just placed an order.</p>
     <ul style="margin:0 0 12px; padding-left:20px; line-height:1.6;">
-      ${itemLines.map((line) => `<li>${line}</li>`).join("")}
+      ${escapedItemLines.map((line) => `<li>${line}</li>`).join("")}
     </ul>
     <p style="margin:0 0 20px; line-height:1.5;"><strong>Total: Rs. ${params.totalAmount.toLocaleString("en-US")}</strong></p>
     <a href="${adminOrdersUrl}" style="display:inline-block; background:#1C1712; color:#FFFDF8; padding:10px 20px; text-decoration:none; font-size:14px;">Review in admin &rarr;</a>

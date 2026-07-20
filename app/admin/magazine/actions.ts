@@ -5,29 +5,34 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getSessionRole } from "@/lib/session-role";
 import { slugify } from "@/lib/slugify";
+import { validateUpload } from "@/lib/image-validation";
 import type { ActionState } from "@/lib/action-state";
 
 // Magazine is site-wide editorial content, not per-stall -- admin-only,
 // entirely separate from app/vendor/actions.ts's vendor-scoped writes.
 
+// Same real magic-byte + size-cap validation as payment proof (see
+// lib/image-validation.ts) rather than trusting file.type.
 async function uploadMagazineHero(
   supabase: ReturnType<typeof createAdminClient>,
   slug: string,
   file: File
-): Promise<string | null> {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "png";
-  const path = `magazine/${slug}-${Date.now()}.${ext}`;
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const validated = await validateUpload(file, "image");
+  if (!validated.ok) return validated;
+
+  const path = `magazine/${slug}-${Date.now()}.${validated.ext}`;
   const { error } = await supabase.storage
     .from("media")
-    .upload(path, await file.arrayBuffer(), { contentType: file.type || "application/octet-stream" });
+    .upload(path, validated.bytes, { contentType: validated.mime });
   if (error) {
     console.error("Magazine hero upload failed:", error);
-    return null;
+    return { ok: false, error: "Upload failed. Check server logs." };
   }
   const {
     data: { publicUrl },
   } = supabase.storage.from("media").getPublicUrl(path);
-  return publicUrl;
+  return { ok: true, url: publicUrl };
 }
 
 export async function createPost(formData: FormData): Promise<ActionState> {
@@ -60,7 +65,9 @@ export async function createPost(formData: FormData): Promise<ActionState> {
 
   let heroUrl: string | null = null;
   if (file instanceof File && file.size > 0) {
-    heroUrl = await uploadMagazineHero(supabase, slug, file);
+    const uploaded = await uploadMagazineHero(supabase, slug, file);
+    if (!uploaded.ok) return { ok: false, error: uploaded.error };
+    heroUrl = uploaded.url;
   }
 
   const { error } = await supabase.from("magazine_posts").insert({
@@ -118,7 +125,8 @@ export async function updatePost(formData: FormData): Promise<ActionState> {
   let heroUrl: string | undefined;
   if (file instanceof File && file.size > 0) {
     const uploaded = await uploadMagazineHero(supabase, existing.slug, file);
-    if (uploaded) heroUrl = uploaded;
+    if (!uploaded.ok) return { ok: false, error: uploaded.error };
+    heroUrl = uploaded.url;
   }
 
   // Only stamped the first time a post goes live -- re-saving an already-

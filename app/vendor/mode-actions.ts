@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getSessionRole } from "@/lib/session-role";
+import { decrementStock, restoreStock } from "@/lib/stock";
 import type { ActionState } from "@/lib/action-state";
 
 // In-person sales logged at a physical event -- separate from
@@ -51,8 +52,33 @@ export async function recordOfflineSale(formData: FormData): Promise<ActionState
   // Never sell more than is actually left -- matters most for a one-of-one
   // item (stock hard-capped at 1 elsewhere), but applies to every product:
   // the "Sold" button reflects stock at page-load time, so a stale tab or a
-  // typed-in quantity can't oversell past what's really available.
+  // typed-in quantity can't oversell past what's really available. This is
+  // just a sensible starting point for `quantity` though -- the read above
+  // can go stale between here and the write below (a concurrent Vendor Mode
+  // tap, or a real online checkout landing on the same variant at the same
+  // moment), which is exactly the race decrementStock's compare-and-swap
+  // guards against, not this clamp.
   const quantity = Math.min(requestedQuantity, variant.stock);
+
+  // Same compare-and-swap decrement checkout's placeOrder already uses (see
+  // lib/stock.ts) -- reserve the stock first, atomically, instead of the
+  // read-current-stock-then-write-a-new-absolute-value this replaces. That
+  // older pattern could lose a concurrent decrement entirely (two
+  // overlapping Sold taps both reading stock=1 and both succeeding), or
+  // silently claw back a real online order's decrement if the two raced on
+  // the same variant (this read-then-write here would overwrite whatever
+  // the other transaction had already committed, rather than adjusting
+  // relative to it).
+  const decremented = await decrementStock(supabase, variantId, quantity);
+  if (!decremented.ok) {
+    return {
+      ok: false,
+      error:
+        decremented.availableStock <= 0
+          ? "Sorry, that item just sold out."
+          : `Only ${decremented.availableStock} left -- try a smaller quantity.`,
+    };
+  }
 
   const { error: insertError } = await supabase.from("offline_sales").insert({
     artist_id: artistId,
@@ -64,11 +90,12 @@ export async function recordOfflineSale(formData: FormData): Promise<ActionState
   });
   if (insertError) {
     console.error("Failed to record offline sale:", insertError);
+    // Stock was already reserved by decrementStock above -- give it back
+    // rather than leave it silently locked away with no sale to show for
+    // it, same reasoning as placeOrder's own rollback-on-insert-failure.
+    await restoreStock(supabase, variantId, quantity);
     return { ok: false, error: "Something went wrong. Check server logs." };
   }
-
-  const newStock = Math.max(0, variant.stock - quantity);
-  await supabase.from("product_variants").update({ stock: newStock }).eq("id", variantId);
 
   revalidatePath("/vendor/mode");
   revalidatePath("/vendor");

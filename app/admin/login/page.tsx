@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
+import { signIn } from "./actions";
 
 const inputStyle: React.CSSProperties = {
   display: "block",
@@ -51,15 +52,17 @@ export default function AdminLoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
+    // Routed through a Server Action (app/admin/login/actions.ts) rather
+    // than calling the Supabase client SDK directly, so the same per-IP
+    // rate limit that guards /gate's password can guard this too -- it has
+    // to run before Supabase Auth ever sees the attempt. On success the
+    // action redirects itself (server-side), so this call never returns
+    // normally in that case; only the failure path reaches the lines below.
+    const result = await signIn(email, password);
+    if (result?.ok === false) {
       setLoading(false);
-      setError("Invalid email or password.");
-      return;
+      setError(result.error);
     }
-    router.push(await destinationFor(supabase));
-    router.refresh();
   }
 
   async function handleSetPassword(e: FormEvent) {

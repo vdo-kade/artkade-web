@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { checkRateLimit, getClientIpFromRequest } from "@/lib/rate-limit";
-import { detectImageType, MAX_UPLOAD_BYTES } from "@/lib/image-validation";
+import { validateUpload } from "@/lib/image-validation";
 import { ORDER_NUMBER_PATTERN } from "@/lib/orders";
 
 // Payment proofs live in their own private "payment-proofs" bucket, kept
@@ -33,7 +33,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many uploads. Please try again later." }, { status: 429 });
   }
 
-  const formData = await req.formData();
+  // A malformed body (no body at all, wrong Content-Type, a truncated
+  // multipart stream) makes req.formData() itself throw rather than return
+  // -- previously uncaught, which surfaced as a bare 500 with no body
+  // instead of a normal validation error. Anything short of a real
+  // multipart/form-data payload is exactly as invalid as a request missing
+  // its fields, so it gets the same 400 treatment.
+  let formData: FormData;
+  try {
+    formData = await req.formData();
+  } catch (err) {
+    console.error("Failed to parse upload-payment-proof request body:", err);
+    return NextResponse.json({ error: "Malformed request." }, { status: 400 });
+  }
+
   const file = formData.get("file");
   const orderNumber = formData.get("orderNumber");
 
@@ -50,20 +63,14 @@ export async function POST(req: NextRequest) {
   if (!ORDER_NUMBER_PATTERN.test(orderNumber)) {
     return NextResponse.json({ error: "Invalid order reference." }, { status: 400 });
   }
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return NextResponse.json({ error: "File is too large. Maximum size is 10MB." }, { status: 400 });
-  }
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const detected = detectImageType(bytes);
-  if (!detected) {
-    return NextResponse.json(
-      { error: "File must be a JPEG, PNG, GIF, or WEBP image." },
-      { status: 400 }
-    );
+  const validated = await validateUpload(file, "image");
+  if (!validated.ok) {
+    return NextResponse.json({ error: validated.error }, { status: 400 });
   }
+  const { bytes, mime, ext } = validated;
 
-  const path = `${orderNumber}-${Date.now()}.${detected.ext}`;
+  const path = `${orderNumber}-${Date.now()}.${ext}`;
 
   // Never forward raw error text from here to the client -- internal
   // client-library errors (e.g. a malformed key breaking header
@@ -78,7 +85,7 @@ export async function POST(req: NextRequest) {
         // Whatever byte signature was actually detected, not whatever
         // content-type label the browser sent -- the client's claim is no
         // longer trusted past the sniff above.
-        contentType: detected.mime,
+        contentType: mime,
       });
 
     if (error) {

@@ -104,7 +104,10 @@ export async function POST(req: NextRequest) {
       email,
       password: tempPassword,
       email_confirm: true,
-      app_metadata: { role: "vendor", artist_id: artist.id },
+      // must_change_password: forces a password change before anything
+      // else in the dashboard (see middleware.ts) -- cleared by
+      // changePassword in app/vendor/actions.ts once they set a real one.
+      app_metadata: { role: "vendor", artist_id: artist.id, must_change_password: true },
     });
     if (userError) {
       // No orphaned empty stall from a failed signup (e.g. duplicate email).

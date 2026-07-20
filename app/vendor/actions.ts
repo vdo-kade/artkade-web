@@ -513,10 +513,31 @@ export async function changePassword(formData: FormData): Promise<ActionState> {
   // the anon-key, cookie-bound client, not the service-role admin client --
   // so this can only ever change the caller's own password.
   const supabase = await createAuthClient();
-  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  const { data: updated, error } = await supabase.auth.updateUser({ password: newPassword });
   if (error) {
     console.error("Failed to update password:", error);
     return { ok: false, error: "Something went wrong. Check server logs." };
+  }
+
+  // Clears the "still on the TempPasswordReveal-issued password" flag
+  // (see app/admin/vendors/create/route.ts, and middleware.ts for what
+  // actually enforces it) now that a real password is set. app_metadata
+  // can only be touched via the Admin API, not a user's own session --
+  // updateUserById merges into the existing app_metadata rather than
+  // replacing it (verified against this project's own Supabase Auth
+  // before relying on it), so role/artist_id survive untouched.
+  if (session.role === "vendor" && session.mustChangePassword && updated.user) {
+    const adminSupabase = createAdminClient();
+    const { error: metadataError } = await adminSupabase.auth.admin.updateUserById(updated.user.id, {
+      app_metadata: { must_change_password: false },
+    });
+    if (metadataError) {
+      // The password itself already changed successfully -- don't fail
+      // the whole action over this. Worst case, middleware sends them
+      // back through this same form once more next time, which is safe,
+      // just an extra step.
+      console.error("Failed to clear must_change_password flag:", metadataError);
+    }
   }
 
   return { ok: true };

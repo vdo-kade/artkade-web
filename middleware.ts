@@ -81,6 +81,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/admin/login", request.url));
   }
 
+  // A vendor whose account still carries its original TempPasswordReveal
+  // password (see app/admin/vendors/create/route.ts) can't reach anything
+  // else in /vendor/* until they set a real one -- enforced here rather
+  // than just nudged from within the dashboard, because
+  // app/vendor/page.tsx's DashboardTabs renders every tab's real data
+  // server-side regardless of which tab is visually active, so a UI-only
+  // nudge wouldn't actually withhold anything. Cleared by changePassword
+  // in app/vendor/actions.ts.
+  const mustChangePassword = isVendor && user?.app_metadata?.must_change_password === true;
+  if (mustChangePassword && pathname !== "/vendor/change-password" && !isServerAction) {
+    return NextResponse.redirect(new URL("/vendor/change-password", request.url));
+  }
+
   return response;
 }
 

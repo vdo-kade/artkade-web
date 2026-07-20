@@ -16,6 +16,7 @@ export function ActionForm({
   confirmMessage,
   successMessage = "Saved.",
   resetOnSuccess = false,
+  onSuccess,
   children,
   style,
 }: {
@@ -23,6 +24,10 @@ export function ActionForm({
   confirmMessage?: string;
   successMessage?: string;
   resetOnSuccess?: boolean;
+  // Optional escape hatch for a caller that needs to react to a real
+  // success (e.g. navigate away) beyond just showing successMessage --
+  // see app/vendor/PasswordChangeForm.tsx's forced-change-password path.
+  onSuccess?: () => void;
   children: ReactNode;
   style?: CSSProperties;
 }) {
@@ -41,6 +46,7 @@ export function ActionForm({
       const result = await action(formData);
       setState(result);
       if (result?.ok && resetOnSuccess) formEl.reset();
+      if (result?.ok) onSuccess?.();
     });
   }
 

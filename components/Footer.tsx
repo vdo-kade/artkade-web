@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase";
-import { SHORT_LOGO_URL, LOGO_OUTLINE_FILTER_SMALL } from "@/lib/brand";
+import { LOGO_URL, LOGO_OUTLINE_FILTER_SMALL } from "@/lib/brand";
+import SocialIcon from "./SocialIcon";
 
 type SocialLink = { label: string; url: string };
 type SocialArtist = { id: string; name: string; socials: SocialLink[] };
@@ -55,16 +56,19 @@ export default function Footer() {
     <footer className="border-t border-line mt-24">
       <div className="mx-auto max-w-6xl px-6 py-14 grid gap-10 md:grid-cols-2 lg:grid-cols-4 text-sm">
         <div>
-          {/* Same transparent-on-cream + hard-edged-outline treatment as
-              the header's small mark (see components/Header.tsx) -- the
-              footer sits on the same cream background, so it reuses the
-              "small" filter rather than the hero's heavier one. */}
+          {/* Full logo (not the header/gate's short "AX" mark) -- the
+              footer is its own brand moment, not a compact nav bar, so it
+              gets the full wordmark+mark lockup. Same transparent-on-cream
+              + hard-edged-outline treatment as everywhere else the logo
+              sits directly on cream (see lib/brand.ts): the "small" filter
+              matches this rendered scale, not the homepage hero's heavier
+              one. */}
           <Image
-            src={SHORT_LOGO_URL}
+            src={LOGO_URL}
             alt="Art Kade"
-            width={812}
-            height={712}
-            sizes="48px"
+            width={1555}
+            height={497}
+            sizes="160px"
             className="h-9 w-auto"
             style={{ filter: LOGO_OUTLINE_FILTER_SMALL }}
           />
@@ -89,24 +93,25 @@ export default function Footer() {
             <p className="font-medium mb-3 tracking-eyebrow uppercase text-xs text-warm-grey">
               Follow along
             </p>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {socialArtists.map((artist) => (
                 <div key={artist.id}>
-                  <p className="text-xs text-warm-grey mb-1">{artist.name}</p>
-                  <ul className="space-y-1">
+                  <p className="text-xs text-warm-grey mb-1.5">{artist.name}</p>
+                  <div className="flex items-center gap-3">
                     {artist.socials.map((social) => (
-                      <li key={social.label}>
-                        <a
-                          href={social.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-accent"
-                        >
-                          {social.label}
-                        </a>
-                      </li>
+                      <a
+                        key={social.label}
+                        href={social.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`${artist.name} on ${social.label}`}
+                        title={social.label}
+                        className="text-warm-grey hover:text-accent transition-colors"
+                      >
+                        <SocialIcon label={social.label} />
+                      </a>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               ))}
             </div>

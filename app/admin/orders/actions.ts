@@ -7,10 +7,18 @@ import { getCachedUser } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import { ORDER_STATUS_LABELS } from "@/lib/orders";
 import { restoreStock } from "@/lib/stock";
+import { deletePaymentProof } from "@/lib/storage";
 import { sendOrderApprovedEmail, sendOrderRejectedEmail } from "@/lib/email";
 import type { ActionState } from "@/lib/action-state";
 
 type OrderStatus = keyof typeof ORDER_STATUS_LABELS;
+
+// An order landing in any of these is done for good -- it'll never be
+// approved/shipped/delivered after this, so its payment-proof screenshot
+// has no further purpose and gets deleted right away instead of sitting
+// in the private bucket forever. Deliberately not "delivered": that's a
+// successful, completed order, and its proof stays as a record.
+const PROOF_CLEANUP_STATUSES = new Set<OrderStatus>(["rejected", "cancelled", "out_of_stock"]);
 
 const NOT_YOUR_STALL_ERROR =
   "This order includes items from another stall -- only Art Kade staff can act on it.";
@@ -90,6 +98,15 @@ async function transitionOrderStatus(orderId: string, status: OrderStatus): Prom
     .from("order_status_history")
     .insert({ order_id: orderId, status });
   if (historyError) console.error("Failed to record order status history:", historyError);
+
+  if (PROOF_CLEANUP_STATUSES.has(status)) {
+    const { data: current } = await supabase
+      .from("orders")
+      .select("payment_proof_url")
+      .eq("id", orderId)
+      .maybeSingle();
+    if (current?.payment_proof_url) await deletePaymentProof(supabase, current.payment_proof_url);
+  }
 
   revalidatePath("/admin/orders");
   revalidatePath("/vendor");

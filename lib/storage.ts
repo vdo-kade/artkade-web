@@ -21,6 +21,21 @@ export async function paymentProofExists(
   return (data ?? []).some((f) => f.name === path);
 }
 
+// Called the moment an order goes rejected/cancelled/out_of_stock (see
+// PROOF_CLEANUP_STATUSES in app/admin/orders/actions.ts) -- the proof
+// screenshot has no further purpose once an order lands there, so it's
+// deleted immediately rather than left to accumulate in the private
+// bucket forever. Fire-and-log like restoreStock's callers: a delete
+// failure here shouldn't turn an otherwise-successful status transition
+// into an error for the admin.
+export async function deletePaymentProof(
+  supabase: ReturnType<typeof createAdminClient>,
+  path: string
+): Promise<void> {
+  const { error } = await supabase.storage.from("payment-proofs").remove([path]);
+  if (error) console.error(`Failed to delete payment proof at ${path}:`, error);
+}
+
 const PHOTO_FIELDS = ["logo_url", "hero_image_url"] as const;
 export type PhotoField = (typeof PHOTO_FIELDS)[number];
 

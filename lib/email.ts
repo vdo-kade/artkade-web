@@ -52,10 +52,17 @@ export async function sendOrderApprovedEmail(params: { to: string; orderNumber: 
     return;
   }
 
+  // order= pre-fills the order number on /track -- the customer still has
+  // to type their own email there, so this link doesn't hand a would-be
+  // guesser anything they couldn't already read straight out of this
+  // email (the order number is already in the subject and body above).
+  const trackUrl = `${SITE_URL}/track?order=${encodeURIComponent(params.orderNumber)}`;
+
   const html = wrapEmailHtml(`
     <h1 style="font-size:22px; margin:0 0 16px; font-weight:600;">Your order is confirmed</h1>
     <p style="margin:0 0 12px; line-height:1.5;">We've checked your payment for order <strong>${params.orderNumber}</strong> and it's approved.</p>
     <p style="margin:0 0 12px; line-height:1.5;">Next up: we'll pack and post it within the week.</p>
+    <a href="${trackUrl}" style="display:inline-block; background:#1C1712; color:#FFFDF8; padding:10px 20px; text-decoration:none; font-size:14px; margin-top:8px;">Track your order &rarr;</a>
     <p style="margin:24px 0 0; color:#8B8175; font-size:13px;">Thanks for shopping at Art Kade.</p>
   `);
   const text = `Your order is confirmed.
@@ -63,6 +70,8 @@ export async function sendOrderApprovedEmail(params: { to: string; orderNumber: 
 We've checked your payment for order ${params.orderNumber} and it's approved.
 
 Next up: we'll pack and post it within the week.
+
+Track your order: ${trackUrl}
 
 Thanks for shopping at Art Kade.`;
 

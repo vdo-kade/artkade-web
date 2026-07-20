@@ -203,12 +203,18 @@ export default function CheckoutPage() {
                 : "We'll be in touch with tracking once it's on its way."}
             </p>
           )}
-          <div>
+          <div className="flex items-center justify-center gap-4 flex-wrap">
             <Link
               href="/"
               className="inline-block bg-ink text-white px-7 py-3 text-sm font-medium hover:bg-accent transition-colors"
             >
               Back to Art Kade
+            </Link>
+            <Link
+              href={`/track?order=${encodeURIComponent(orderNumber)}`}
+              className="inline-block border border-ink px-7 py-3 text-sm font-medium hover:border-accent hover:text-accent transition-colors"
+            >
+              Track this order
             </Link>
           </div>
         </section>

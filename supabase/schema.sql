@@ -218,6 +218,89 @@ create table magazine_posts (
 );
 
 -- ============================================================
+-- INDEXES
+-- None of the tables above had any indexes beyond what primary keys and
+-- unique constraints create automatically (orders.order_number,
+-- artists.slug, magazine_posts.slug, product_variants' implicit id pkey,
+-- etc). Every index below matches a real .eq()/.order() call site or FK
+-- cascade-delete path in the app, verified against a real Postgres
+-- EXPLAIN plan at a realistic data volume (~20k orders/40k order_items)
+-- rather than added blanket -- see the migration commit for the full
+-- before/after EXPLAIN output.
+-- ============================================================
+
+-- Every catalogue page nests product_variants(...) under products -- the
+-- single hottest join in the app.
+create index if not exists idx_product_variants_product_id on product_variants(product_id);
+
+-- artist_id is filtered directly across the vendor/admin dashboards
+-- (product management, deletes, dashboard counts) and joined via
+-- artists.products(...) on every stall page; sort_order is the
+-- near-universal accompanying ORDER BY, so this composite serves both
+-- without needing a second index.
+create index if not exists idx_products_artist_id_sort_order on products(artist_id, sort_order);
+
+-- Same artist_id-filter pattern as products, for the vendor freebies list
+-- and delete action.
+create index if not exists idx_freebies_artist_id on freebies(artist_id);
+
+-- Vendor Mode's offline-sales tally and the God dashboard's per-artist
+-- sales count.
+create index if not exists idx_offline_sales_artist_id on offline_sales(artist_id);
+
+-- Nullified when an artist is deleted (see the God dashboard's
+-- delete-vendor flow, app/admin/dashboard-actions.ts) -- that
+-- UPDATE ... WHERE artist_id = $1 needs this same index.
+create index if not exists idx_magazine_posts_artist_id on magazine_posts(artist_id);
+
+-- The public magazine index page and app/sitemap.ts both filter
+-- published = true and sort by published_at descending -- every real
+-- call site filters on that exact same literal, so a partial index (only
+-- published rows) serves it more cheaply than a full composite would.
+create index if not exists idx_magazine_posts_published_at on magazine_posts(published_at) where published = true;
+
+-- Deleting an artist cascades here on both columns. viewer_artist_id is
+-- already covered by the existing (viewer_artist_id, target_artist_id)
+-- unique constraint's index (it's the leftmost column, and it's also
+-- filtered directly for a vendor's collab visibility) -- but
+-- target_artist_id alone isn't covered by that composite, and needs its
+-- own index for its half of the cascade-delete check.
+create index if not exists idx_stall_collaborators_target_artist_id on stall_collaborators(target_artist_id);
+
+-- The admin dashboard's pending-review queue (every God dashboard page
+-- load, the vendor collab check, and the dashboard's pending count) runs
+-- this exact filter+sort, and every .eq("status", ...) call site in the
+-- app filters on this same literal -- a partial index (only
+-- awaiting_review rows, which clear out quickly as orders get reviewed)
+-- stays far smaller than a full composite over orders' whole lifetime and
+-- serves the same query just as well (~80KB vs ~630KB in a 20k-row test,
+-- see the migration commit for the full EXPLAIN comparison).
+create index if not exists idx_orders_awaiting_review_created_at on orders(created_at) where status = 'awaiting_review';
+
+-- Joined constantly (every order view nests order_items/
+-- order_status_history under orders), and also the RESTRICT-checked FK
+-- path when a product or variant is hard-deleted (see
+-- app/vendor/actions.ts's deleteProduct).
+create index if not exists idx_order_items_order_id on order_items(order_id);
+create index if not exists idx_order_items_product_id on order_items(product_id);
+create index if not exists idx_order_items_variant_id on order_items(variant_id);
+create index if not exists idx_order_status_history_order_id on order_status_history(order_id);
+
+-- Homepage, footer, freebies page, and Vendor Mode all sort stalls by
+-- this.
+create index if not exists idx_artists_sort_order on artists(sort_order);
+
+-- The God dashboard's beta-signups list and CSV export both sort by
+-- this.
+create index if not exists idx_beta_signups_created_at on beta_signups(created_at);
+
+-- orders.order_number already has a unique constraint (hence an
+-- automatic index) -- the /track lookup (app/track/actions.ts) filters
+-- by it alone and only ever compares customer_email in application code
+-- afterward, never in a WHERE clause, so no separate index is needed for
+-- either column for that feature.
+
+-- ============================================================
 -- ROW LEVEL SECURITY
 -- Visitors (anon key) can only READ active/published catalogue data.
 -- Orders can be INSERTED by anon (a customer placing an order) but never

@@ -87,10 +87,14 @@ export async function middleware(request: NextRequest) {
 export const config = {
   // Runs on every route except: Next's own static/image asset pipeline,
   // the site's favicon files (app/icon.png, app/apple-icon.png,
-  // favicon.ico), and /api/* -- API routes aren't page navigations, and at
+  // favicon.ico), /api/* -- API routes aren't page navigations, and at
   // least one (the cron route) is deliberately called with no cookies at
   // all by Vercel's infrastructure, so gating it here would silently break
   // scheduled popup expiry (see app/api/cron/expire-popups/route.ts's own
-  // comment about being outside middleware's reach on purpose).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|api/).*)"],
+  // comment about being outside middleware's reach on purpose) -- and
+  // sitemap.xml/robots.txt (app/sitemap.ts, app/robots.ts), which search
+  // crawlers request with no gate cookie at all; redirecting those to
+  // /gate would serve an HTML login page in place of the real XML/text,
+  // breaking indexing entirely rather than just being inconvenient.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|api/|sitemap.xml|robots.txt).*)"],
 };

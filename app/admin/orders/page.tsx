@@ -5,18 +5,11 @@ import { getCachedUser } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import AdminNav from "@/components/AdminNav";
 import { ActionForm } from "@/components/ActionForm";
-import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, NEXT_STATUSES } from "@/lib/orders";
-import {
-  approveOrder,
-  rejectOrder,
-  markShipped,
-  markDelivered,
-  markCancelled,
-  markOutOfStock,
-  updateInternalNotes,
-} from "./actions";
+import StatusHistory from "@/components/StatusHistory";
+import OrderFulfillmentActions from "@/components/OrderFulfillmentActions";
+import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/lib/orders";
+import { approveOrder, rejectOrder, updateInternalNotes } from "./actions";
 import { logout } from "../actions";
-import type { ActionState } from "@/lib/action-state";
 
 export const revalidate = 0;
 
@@ -140,34 +133,6 @@ function ItemsTable({ items }: { items: OrderRow["order_items"] }) {
   );
 }
 
-// order_status_history was write-only until now -- every transition
-// inserts a row (see ./actions.ts's transitionOrderStatus) but nothing
-// ever rendered them back. Sorted client-side rather than via the select
-// string: Supabase's nested-resource syntax doesn't support ordering a
-// joined table independently of the top-level query's own .order().
-function StatusHistory({ history }: { history: OrderRow["order_status_history"] }) {
-  if (history.length === 0) return null;
-  const sorted = [...history].sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
-  return (
-    <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed #ddd" }}>
-      <p style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, color: "#999", marginBottom: 6 }}>
-        History
-      </p>
-      <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 12, color: "#666" }}>
-        {sorted.map((h, i) => (
-          <li key={i} style={{ marginBottom: 2 }}>
-            <strong style={{ color: ORDER_STATUS_COLORS[h.status] ?? "#666" }}>
-              {ORDER_STATUS_LABELS[h.status] ?? h.status}
-            </strong>{" "}
-            · {new Date(h.created_at).toLocaleString()}
-            {h.note ? ` · ${h.note}` : ""}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function InternalNotes({ order }: { order: OrderRow }) {
   return (
     <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed #ddd" }}>
@@ -186,40 +151,6 @@ function InternalNotes({ order }: { order: OrderRow }) {
           Save notes
         </button>
       </ActionForm>
-    </div>
-  );
-}
-
-const NEXT_STATUS_ACTIONS: Record<string, { action: (formData: FormData) => Promise<ActionState>; label: string; color: string }> = {
-  shipped: { action: markShipped, label: "Mark shipped", color: "#0a6dab" },
-  delivered: { action: markDelivered, label: "Mark delivered", color: "#1a7f37" },
-  cancelled: { action: markCancelled, label: "Cancel order", color: "#999" },
-  out_of_stock: { action: markOutOfStock, label: "Mark out of stock", color: "#b00" },
-};
-
-// Renders whichever "next status" buttons apply to this order's current
-// status (see lib/orders.ts's NEXT_STATUSES) -- nothing renders for a
-// terminal status (rejected, delivered, cancelled, out_of_stock).
-function FulfillmentActions({ order }: { order: OrderRow }) {
-  const nextStatuses = NEXT_STATUSES[order.status];
-  if (!nextStatuses || nextStatuses.length === 0) return null;
-  return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-      {nextStatuses.map((status) => {
-        const cfg = NEXT_STATUS_ACTIONS[status];
-        if (!cfg) return null;
-        return (
-          <ActionForm key={status} action={cfg.action} successMessage={`${ORDER_STATUS_LABELS[status]}.`}>
-            <input type="hidden" name="orderId" value={order.id} />
-            <button
-              type="submit"
-              style={{ background: cfg.color, color: "white", padding: "6px 12px", border: "none" }}
-            >
-              {cfg.label}
-            </button>
-          </ActionForm>
-        );
-      })}
     </div>
   );
 }
@@ -409,7 +340,7 @@ export default async function AdminOrdersPage() {
             <ProofPreview order={order} />
           </div>
 
-          <FulfillmentActions order={order} />
+          <OrderFulfillmentActions orderId={order.id} status={order.status} />
           <StatusHistory history={order.order_status_history} />
           <InternalNotes order={order} />
         </div>

@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { createClient as createAuthClient } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import { CATEGORY_ORDER } from "@/lib/catalogue";
+import { defaultWeightGrams } from "@/lib/shipping";
 import { FREEBIE_CATEGORY_ORDER } from "@/lib/freebies";
 import { uploadStallPhotoFile, uploadFreebieFile, type PhotoField } from "@/lib/storage";
 import { runPopupLifecycleTick } from "@/lib/popup-expiry";
@@ -257,6 +258,7 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
       label: v.label,
       price: v.price,
       stock: v.stock,
+      weight_grams: defaultWeightGrams(category, v.label),
     }))
   );
 
@@ -345,7 +347,16 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
       const clampedStock = isOneOff ? Math.min(Math.floor(stock), 1) : Math.floor(stock);
       return supabase
         .from("product_variants")
-        .update({ label: label.trim(), price, stock: clampedStock })
+        .update({
+          label: label.trim(),
+          price,
+          stock: clampedStock,
+          // Recomputed on every edit, not just at creation -- if the label
+          // changes (e.g. relabelled from A5 to A4), weight should follow
+          // it rather than go stale. There's no manual weight override UI,
+          // so this is always safe to recompute.
+          weight_grams: defaultWeightGrams(category, label.trim()),
+        })
         .eq("id", variantId)
         .eq("product_id", productId);
     })

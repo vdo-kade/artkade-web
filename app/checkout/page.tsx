@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import { useBag, bagItemKey } from "@/components/BagProvider";
 import { createClient } from "@/lib/supabase";
 import { placeOrder } from "./actions";
+import { SHIPPING_METHOD_LABELS, type ShippingMethod } from "@/lib/shipping";
 
 function generateOrderNumber(): string {
   const n = Math.floor(100000 + Math.random() * 900000);
@@ -94,6 +95,8 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
+  const [isBulk, setIsBulk] = useState(false);
+  const [shippingMethod, setShippingMethod] = useState<ShippingMethod>("registered_post");
 
   const amountUnderMinimum = MIN_ORDER_TOTAL - totalAmount;
   const belowMinimum = items.length > 0 && amountUnderMinimum > 0;
@@ -155,6 +158,8 @@ export default function CheckoutPage() {
       }
 
       clear();
+      setIsBulk(result.isBulk);
+      setShippingMethod(result.shippingMethod);
       setOrderNumber(result.orderNumber);
     } catch (err) {
       setError(
@@ -181,6 +186,23 @@ export default function CheckoutPage() {
           <p className="font-mono text-lg bg-white border border-line inline-block px-4 py-2 mb-8">
             {orderNumber}
           </p>
+          {isBulk ? (
+            <p className="text-warm-grey mb-8 border border-line bg-white p-4 text-left">
+              This order is on the larger side (over 1kg), so it needs its own shipping
+              rate rather than our usual free shipping. Message us on WhatsApp at{" "}
+              <a href="https://wa.me/94773891111" className="text-accent underline" target="_blank" rel="noopener noreferrer">
+                077 389 1111
+              </a>{" "}
+              and we&apos;ll sort out the details.
+            </p>
+          ) : (
+            <p className="text-warm-grey mb-8 border border-line bg-white p-4 text-left">
+              Free shipping via {SHIPPING_METHOD_LABELS[shippingMethod]}.{" "}
+              {shippingMethod === "registered_post"
+                ? "We pack orders over the weekend and post every Monday."
+                : "We'll be in touch with tracking once it's on its way."}
+            </p>
+          )}
           <div>
             <Link
               href="/"
@@ -246,6 +268,17 @@ export default function CheckoutPage() {
                 <span className="font-mono">
                   Rs. {totalAmount.toLocaleString("en-US")}
                 </span>
+              </div>
+              <div className="border border-line bg-white p-4 mt-4 text-sm text-warm-grey">
+                <p className="font-medium text-ink mb-1">Shipping</p>
+                <p>
+                  Free shipping on everything. Stickers and small prints (A6-A4) under 1kg
+                  go by Registered Post -- packed over the weekend, posted every Monday.
+                  Bigger prints (A3 and up), mixed orders, or anything over 1kg goes by
+                  courier instead. Orders over 1kg count as bulk and need their own
+                  shipping rate -- if that&apos;s you, we&apos;ll ask you to reach us on
+                  WhatsApp (077 389 1111) to sort it out rather than checking out here.
+                </p>
               </div>
               {belowMinimum && (
                 <p className="text-sm text-red-600 mt-2">

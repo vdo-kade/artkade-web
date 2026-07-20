@@ -8,6 +8,12 @@ import { logout } from "@/app/admin/actions";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/catalogue";
 import { FREEBIE_CATEGORY_LABELS, FREEBIE_CATEGORY_ORDER, FREEBIE_SELECT, type FreebieRow } from "@/lib/freebies";
 import { ORDER_STATUS_LABELS } from "@/lib/orders";
+import {
+  SHIPPING_METHOD_LABELS,
+  registeredPostShipDate,
+  formatShipDate,
+  type ShippingMethod,
+} from "@/lib/shipping";
 import { updateStallDetails, uploadStallPhoto, createProduct, updateProduct, createFreebie } from "./actions";
 import DeleteProductButton from "./DeleteProductButton";
 import DeleteFreebieButton from "./DeleteFreebieButton";
@@ -16,6 +22,9 @@ import NewProductToast from "./NewProductToast";
 import DashboardTabs from "./DashboardTabs";
 import AdminNav from "@/components/AdminNav";
 import { ActionForm } from "@/components/ActionForm";
+import StatusHistory, { type StatusHistoryEntry } from "@/components/StatusHistory";
+import OrderFulfillmentActions from "@/components/OrderFulfillmentActions";
+import { approveOrder, rejectOrder } from "@/app/admin/orders/actions";
 
 export const revalidate = 0;
 
@@ -84,8 +93,12 @@ type TrackerOrderItemRow = {
     status: string;
     total_amount: number;
     created_at: string;
+    shipping_method: ShippingMethod | null;
   };
 };
+
+type AllOrderItemsRow = { order_id: string; products: { artist_id: string } | null };
+type OrderHistoryRow = { order_id: string; status: string; note: string | null; created_at: string };
 
 type TrackerOrder = {
   id: string;
@@ -97,6 +110,15 @@ type TrackerOrder = {
   totalAmount: number;
   createdAt: string;
   itemNames: string[];
+  // Whether every item in the order (not just this stall's own items)
+  // belongs to this vendor -- gates whether approve/reject/fulfillment
+  // buttons render at all. Re-checked independently server-side by the
+  // actions themselves (see app/admin/orders/actions.ts's
+  // vendorOwnsWholeOrder) -- this is purely a display-side mirror of that
+  // same rule so a vendor doesn't see buttons that would just reject them.
+  isSingleStall: boolean;
+  history: StatusHistoryEntry[];
+  shippingMethod: ShippingMethod | null;
 };
 
 const PROCESSED_STATUSES = new Set(["approved", "shipped", "delivered"]);
@@ -239,7 +261,7 @@ export default async function VendorDashboardPage({
     supabase
       .from("order_items")
       .select(
-        "order_id, quantity, products!inner(name, artist_id), orders!inner(id, order_number, customer_name, customer_phone, shipping_address, status, total_amount, created_at)"
+        "order_id, quantity, products!inner(name, artist_id), orders!inner(id, order_number, customer_name, customer_phone, shipping_address, status, total_amount, created_at, shipping_method)"
       )
       .eq("products.artist_id", selectedArtistId)
       .returns<TrackerOrderItemRow[]>(),
@@ -258,6 +280,41 @@ export default async function VendorDashboardPage({
     .sort((a, b) => (a[0] < b[0] ? 1 : -1))
     .slice(0, 30);
 
+  const trackerOrderIds = Array.from(new Set((orderItemsResult.data ?? []).map((r) => r.orders.id)));
+
+  // Two follow-up queries, only possible once the order IDs above are
+  // known: the *full* item composition of each order (not just this
+  // stall's own items, which the query above deliberately filtered to) --
+  // needed to tell whether a vendor is actually allowed to act on it (see
+  // app/admin/orders/actions.ts's vendorOwnsWholeOrder, mirrored here for
+  // display) -- and each order's status history for the timeline.
+  const [allItemsResult, historyResult] = trackerOrderIds.length
+    ? await Promise.all([
+        supabase
+          .from("order_items")
+          .select("order_id, products(artist_id)")
+          .in("order_id", trackerOrderIds)
+          .returns<AllOrderItemsRow[]>(),
+        supabase
+          .from("order_status_history")
+          .select("order_id, status, note, created_at")
+          .in("order_id", trackerOrderIds)
+          .returns<OrderHistoryRow[]>(),
+      ])
+    : [{ data: [] as AllOrderItemsRow[] }, { data: [] as OrderHistoryRow[] }];
+
+  const artistIdsByOrder = new Map<string, Set<string>>();
+  for (const row of allItemsResult.data ?? []) {
+    if (!row.products?.artist_id) continue;
+    if (!artistIdsByOrder.has(row.order_id)) artistIdsByOrder.set(row.order_id, new Set());
+    artistIdsByOrder.get(row.order_id)!.add(row.products.artist_id);
+  }
+  const historyByOrder = new Map<string, StatusHistoryEntry[]>();
+  for (const row of historyResult.data ?? []) {
+    if (!historyByOrder.has(row.order_id)) historyByOrder.set(row.order_id, []);
+    historyByOrder.get(row.order_id)!.push({ status: row.status, note: row.note, created_at: row.created_at });
+  }
+
   const trackerOrdersById = new Map<string, TrackerOrder>();
   for (const row of orderItemsResult.data ?? []) {
     const o = row.orders;
@@ -265,6 +322,7 @@ export default async function VendorDashboardPage({
     if (existing) {
       if (row.products?.name) existing.itemNames.push(row.products.name);
     } else {
+      const artistIds = artistIdsByOrder.get(o.id) ?? new Set([selectedArtistId]);
       trackerOrdersById.set(o.id, {
         id: o.id,
         orderNumber: o.order_number,
@@ -275,6 +333,9 @@ export default async function VendorDashboardPage({
         totalAmount: o.total_amount,
         createdAt: o.created_at,
         itemNames: row.products?.name ? [row.products.name] : [],
+        isSingleStall: artistIds.size === 1 && artistIds.has(selectedArtistId),
+        history: historyByOrder.get(o.id) ?? [],
+        shippingMethod: o.shipping_method,
       });
     }
   }
@@ -286,6 +347,17 @@ export default async function VendorDashboardPage({
   const otherTrackerOrders = trackerOrders.filter(
     (o) => o.status !== "awaiting_review" && !PROCESSED_STATUSES.has(o.status)
   );
+
+  // Day-keeper: pending/approved orders (the ones still waiting to be
+  // packed) grouped by shipping method so it's obvious at a glance what
+  // needs to ship by when -- Registered Post batches on a fixed weekly
+  // cycle (see lib/shipping.ts's registeredPostShipDate), courier doesn't
+  // have one, so it's just "arrange individually" rather than a made-up
+  // date.
+  const shipReadyOrders = trackerOrders.filter((o) => o.status === "awaiting_review" || o.status === "approved");
+  const registeredPostOrders = shipReadyOrders.filter((o) => o.shippingMethod === "registered_post");
+  const courierOrders = shipReadyOrders.filter((o) => o.shippingMethod !== "registered_post");
+  const nextShipDate = formatShipDate(registeredPostShipDate());
 
   // Read-only visibility into a collab stall (e.g. Shilpa Kade has no login
   // of its own -- Nuwan sees it here instead of getting a second account).
@@ -720,6 +792,44 @@ export default async function VendorDashboardPage({
             </section>
 
             <section style={card}>
+              <h2 style={{ fontSize: 18, marginBottom: 4 }}>Ship by</h2>
+              <p style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>
+                Pending and approved orders, grouped by how they'll ship.
+              </p>
+              {shipReadyOrders.length === 0 && <p style={{ fontSize: 13, color: "#999" }}>Nothing waiting to ship.</p>}
+              {registeredPostOrders.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                    📮 {SHIPPING_METHOD_LABELS.registered_post} — ship by {nextShipDate}{" "}
+                    <span style={{ fontWeight: "normal", color: "#666" }}>({registeredPostOrders.length})</span>
+                  </p>
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 13 }}>
+                    {registeredPostOrders.map((o) => (
+                      <li key={o.id} style={{ padding: "2px 0" }}>
+                        {o.orderNumber} — {o.customerName}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {courierOrders.length > 0 && (
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                    🚚 {SHIPPING_METHOD_LABELS.courier} — arrange individually{" "}
+                    <span style={{ fontWeight: "normal", color: "#666" }}>({courierOrders.length})</span>
+                  </p>
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 13 }}>
+                    {courierOrders.map((o) => (
+                      <li key={o.id} style={{ padding: "2px 0" }}>
+                        {o.orderNumber} — {o.customerName}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+
+            <section style={card}>
               <h2 style={{ fontSize: 18, marginBottom: 4 }}>
                 Orders — pending <span style={{ fontSize: 12, color: "#666", fontWeight: "normal" }}>({pendingTrackerOrders.length})</span>
               </h2>
@@ -802,7 +912,13 @@ function PhotoUploader({
   );
 }
 
+// Approve/reject/mark-shipped/etc are the exact same actions the God
+// dashboard uses (app/admin/orders/actions.ts) -- they independently
+// re-check that this vendor actually owns every item in the order before
+// doing anything, so isSingleStall here only controls whether the buttons
+// render, not whether the action is actually allowed to succeed.
 function TrackerOrderRow({ order }: { order: TrackerOrder }) {
+  const canAct = order.isSingleStall;
   return (
     <div style={{ borderTop: "1px solid #eee", paddingTop: 8, marginTop: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -824,6 +940,32 @@ function TrackerOrderRow({ order }: { order: TrackerOrder }) {
           Shipping label &rarr;
         </a>
       </div>
+
+      {!canAct && (
+        <p style={{ fontSize: 12, color: "#a06a00", marginTop: 6 }}>
+          This order also includes another stall&apos;s items -- Art Kade staff manage it.
+        </p>
+      )}
+
+      {canAct && order.status === "awaiting_review" && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+          <ActionForm action={approveOrder} successMessage="Approved.">
+            <input type="hidden" name="orderId" value={order.id} />
+            <button type="submit" style={{ background: "green", color: "white", padding: "6px 12px", border: "none" }}>
+              Approve
+            </button>
+          </ActionForm>
+          <ActionForm action={rejectOrder} successMessage="Rejected.">
+            <input type="hidden" name="orderId" value={order.id} />
+            <button type="submit" style={{ background: "#b00", color: "white", padding: "6px 12px", border: "none" }}>
+              Reject
+            </button>
+          </ActionForm>
+        </div>
+      )}
+      {canAct && <OrderFulfillmentActions orderId={order.id} status={order.status} />}
+
+      <StatusHistory history={order.history} />
     </div>
   );
 }

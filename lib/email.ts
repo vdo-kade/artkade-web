@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { SITE_URL } from "./brand";
 
 // Lazily constructed rather than at module load -- mirrors
 // createAdminClient()'s pattern of only failing when actually used, not on
@@ -34,7 +35,8 @@ function wrapEmailHtml(bodyHtml: string): string {
 </html>`;
 }
 
-// The two transactional emails an order can trigger -- everything else
+// Three transactional emails total: the two customer-facing ones below,
+// plus the admin new-order notification further down. Everything else
 // (shipped/delivered/cancelled/out_of_stock) is a fulfillment-tracking
 // status with no promised email and no copy to reuse, so it stays out of
 // scope here (see app/admin/orders/actions.ts).
@@ -102,4 +104,53 @@ If you think this is a mistake, just reply to this email and we'll sort it out.`
     text,
   });
   if (error) console.error("Failed to send order-rejected email:", error);
+}
+
+// Staff-facing, not customer-facing -- goes to the same inbox that already
+// handles fulfillment (REPLY_TO_EMAIL's default), not the customer. Fired
+// from placeOrder (app/checkout/actions.ts) right after a real order is
+// created, so Varsha doesn't have to keep the /admin/orders tab open and
+// polling to notice a new one came in.
+export async function sendAdminNewOrderNotification(params: {
+  orderNumber: string;
+  customerName: string;
+  items: { name: string; variantLabel: string; quantity: number }[];
+  totalAmount: number;
+}): Promise<void> {
+  const resend = getResendClient();
+  if (!resend) {
+    console.error("RESEND_API_KEY is not set -- skipping admin new-order notification.");
+    return;
+  }
+
+  const adminOrdersUrl = `${SITE_URL}/admin/orders`;
+  const itemLines = params.items.map((i) => `${i.name} (${i.variantLabel}) x${i.quantity}`);
+
+  const html = wrapEmailHtml(`
+    <h1 style="font-size:22px; margin:0 0 16px; font-weight:600;">New order: ${params.orderNumber}</h1>
+    <p style="margin:0 0 12px; line-height:1.5;"><strong>${params.customerName}</strong> just placed an order.</p>
+    <ul style="margin:0 0 12px; padding-left:20px; line-height:1.6;">
+      ${itemLines.map((line) => `<li>${line}</li>`).join("")}
+    </ul>
+    <p style="margin:0 0 20px; line-height:1.5;"><strong>Total: Rs. ${params.totalAmount.toLocaleString("en-US")}</strong></p>
+    <a href="${adminOrdersUrl}" style="display:inline-block; background:#1C1712; color:#FFFDF8; padding:10px 20px; text-decoration:none; font-size:14px;">Review in admin &rarr;</a>
+  `);
+  const text = `New order: ${params.orderNumber}
+
+${params.customerName} just placed an order.
+
+${itemLines.join("\n")}
+
+Total: Rs. ${params.totalAmount.toLocaleString("en-US")}
+
+Review it here: ${adminOrdersUrl}`;
+
+  const { error } = await resend.emails.send({
+    from: FROM_EMAIL,
+    to: REPLY_TO_EMAIL,
+    subject: `New order ${params.orderNumber} -- Rs. ${params.totalAmount.toLocaleString("en-US")}`,
+    html,
+    text,
+  });
+  if (error) console.error("Failed to send admin new-order notification:", error);
 }

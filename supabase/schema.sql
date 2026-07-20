@@ -79,7 +79,13 @@ create table product_variants (
   label text not null,          -- e.g. 'A5', 'Medium'
   price numeric(10,2) not null,
   stock int not null default 0, -- null/omit stock tracking for digital & freebies
-  is_active boolean not null default true
+  is_active boolean not null default true,
+  -- Nullable: null means "not physically shipped" (digital/freebie) or an
+  -- unrecognized print size that was never backfilled. Defaulted by
+  -- category/size (see lib/shipping.ts's defaultWeightGrams) both in the
+  -- one-time backfill and going forward whenever a vendor adds/edits a
+  -- variant (see app/vendor/actions.ts).
+  weight_grams int
 );
 
 -- ---------- ORDERS ----------
@@ -107,7 +113,14 @@ create table orders (
   internal_notes text,                        -- private, staff-only
   created_at timestamptz not null default now(),
   reviewed_at timestamptz,
-  reviewed_by text
+  reviewed_by text,
+  -- Snapshotted at placeOrder time from product_variants.weight_grams
+  -- (see lib/shipping.ts), not re-derived later -- a later catalogue edit
+  -- shouldn't silently rewrite a past order's shipping classification,
+  -- same reasoning as order_items.unit_price already being a snapshot.
+  total_weight_grams int not null default 0,
+  is_bulk boolean not null default false,        -- total_weight_grams > 1000
+  shipping_method text                           -- 'registered_post' | 'courier'
 );
 
 create table order_items (

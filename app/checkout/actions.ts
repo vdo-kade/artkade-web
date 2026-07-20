@@ -3,20 +3,32 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { decrementStock, restoreStock } from "@/lib/stock";
+import {
+  computeTotalWeightGrams,
+  determineShippingMethod,
+  isBulkOrder,
+  type ShippableItem,
+  type ShippingMethod,
+} from "@/lib/shipping";
+import { sendAdminNewOrderNotification } from "@/lib/email";
 
 const MIN_ORDER_TOTAL = 1350;
 
 export type CheckoutItemInput = { variantId: string; quantity: number };
 
-export type CheckoutResult = { ok: true; orderNumber: string } | { ok: false; error: string };
+export type CheckoutResult =
+  | { ok: true; orderNumber: string; isBulk: boolean; shippingMethod: ShippingMethod }
+  | { ok: false; error: string };
 
 type VariantRow = {
   id: string;
+  label: string;
   price: number;
   stock: number;
+  weight_grams: number | null;
   is_active: boolean;
   product_id: string;
-  products: { is_active: boolean } | null;
+  products: { name: string; category: string; is_active: boolean } | null;
 };
 
 // The one place an order actually gets created -- checkout used to insert
@@ -77,7 +89,7 @@ export async function placeOrder(input: {
 
   const { data: variants, error: variantsError } = await supabase
     .from("product_variants")
-    .select("id, price, stock, is_active, product_id, products(is_active)")
+    .select("id, label, price, stock, weight_grams, is_active, product_id, products(name, category, is_active)")
     .in("id", Array.from(requested.keys()))
     .returns<VariantRow[]>();
   if (variantsError) {
@@ -98,15 +110,33 @@ export async function placeOrder(input: {
 
   let total = 0;
   const lineItems: { product_id: string; variant_id: string; quantity: number; unit_price: number }[] = [];
+  const shippableItems: ShippableItem[] = [];
+  const emailItems: { name: string; variantLabel: string; quantity: number }[] = [];
   for (const [variantId, quantity] of requested) {
     const variant = variantMap.get(variantId)!;
     lineItems.push({ product_id: variant.product_id, variant_id: variantId, quantity, unit_price: variant.price });
     total += variant.price * quantity;
+    shippableItems.push({
+      category: variant.products?.category ?? "other",
+      label: variant.label,
+      quantity,
+      weightGrams: variant.weight_grams,
+    });
+    emailItems.push({ name: variant.products?.name ?? "(unknown item)", variantLabel: variant.label, quantity });
   }
 
   if (total < MIN_ORDER_TOTAL) {
     return { ok: false, error: `Minimum order is Rs. ${MIN_ORDER_TOTAL.toLocaleString("en-US")}.` };
   }
+
+  // Snapshotted onto the order below rather than re-derived later -- same
+  // reasoning as unit_price already being captured on order_items instead
+  // of re-joined from the live catalogue: a later change to a variant's
+  // weight_grams (e.g. correcting a mislabeled print size) shouldn't
+  // silently rewrite a past order's shipping classification.
+  const totalWeightGrams = computeTotalWeightGrams(shippableItems);
+  const bulk = isBulkOrder(totalWeightGrams);
+  const shippingMethod = determineShippingMethod(shippableItems, totalWeightGrams);
 
   // Reserve stock for every line before creating the order. If any item
   // comes up short, undo whatever already succeeded -- a partial failure
@@ -140,6 +170,9 @@ export async function placeOrder(input: {
       payment_proof_url: input.paymentProofPath,
       total_amount: total,
       customer_notes: typeof input.customerNotes === "string" && input.customerNotes.trim() ? input.customerNotes.trim() : null,
+      total_weight_grams: totalWeightGrams,
+      is_bulk: bulk,
+      shipping_method: shippingMethod,
     })
     .select("id")
     .single();
@@ -162,7 +195,21 @@ export async function placeOrder(input: {
     return { ok: false, error: "Something went wrong placing your order. Please try again." };
   }
 
+  // Fire-and-log, not fire-and-fail -- same reasoning as the approve/reject
+  // emails (see lib/email.ts): an email hiccup shouldn't turn a real,
+  // successful order into an error response for the customer.
+  try {
+    await sendAdminNewOrderNotification({
+      orderNumber: input.orderNumber,
+      customerName: input.customerName.trim(),
+      items: emailItems,
+      totalAmount: total,
+    });
+  } catch (err) {
+    console.error("Failed to send admin new-order notification:", err);
+  }
+
   revalidatePath("/");
   revalidatePath("/search");
-  return { ok: true, orderNumber: input.orderNumber };
+  return { ok: true, orderNumber: input.orderNumber, isBulk: bulk, shippingMethod };
 }

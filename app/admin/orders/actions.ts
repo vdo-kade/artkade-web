@@ -12,29 +12,63 @@ import type { ActionState } from "@/lib/action-state";
 
 type OrderStatus = keyof typeof ORDER_STATUS_LABELS;
 
-// Was missing entirely -- every other admin/vendor action in this app
-// re-derives the caller's role and bounces a dead session to login rather
-// than silently no-opping (see app/vendor/actions.ts for the original
-// reasoning). This one used the service-role client directly with no check
-// at all, so it ran for anyone regardless of session state.
-//
+const NOT_YOUR_STALL_ERROR =
+  "This order includes items from another stall -- only Art Kade staff can act on it.";
+
+// A vendor can act on an order only if every line item in it belongs to
+// their own stall -- an order mixing items from multiple stalls stays
+// admin-only, since one vendor shouldn't unilaterally decide the fate of
+// another vendor's items just because they happened to land in the same
+// cart. Checked fresh against order_items -> products.artist_id every
+// call, never trusted from anything client-submitted. An order with no
+// items at all (shouldn't happen, but defensively) fails closed.
+async function vendorOwnsWholeOrder(
+  supabase: ReturnType<typeof createAdminClient>,
+  orderId: string,
+  artistId: string
+): Promise<boolean> {
+  const { data: items, error } = await supabase
+    .from("order_items")
+    .select("products(artist_id)")
+    .eq("order_id", orderId)
+    .returns<{ products: { artist_id: string } | null }[]>();
+  if (error || !items || items.length === 0) return false;
+  return items.every((item) => item.products?.artist_id === artistId);
+}
+
+// Single funnel every order action goes through for authorization -- admin
+// is unscoped, vendor is scoped to vendorOwnsWholeOrder above. A dead
+// session bounces to login (see app/vendor/actions.ts for the original
+// "why redirect instead of no-op" reasoning); an authenticated caller who
+// just isn't allowed to touch *this* order gets a real inline error
+// instead, since that's a normal, expected outcome for a vendor browsing
+// mixed-stall orders, not a broken session.
+async function authorizeOrderAction(
+  supabase: ReturnType<typeof createAdminClient>,
+  orderId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await getSessionRole();
+  if (!session) redirect("/admin/login");
+  if (session.role === "admin") return { ok: true };
+  const allowed = await vendorOwnsWholeOrder(supabase, orderId, session.artistId);
+  return allowed ? { ok: true } : { ok: false, error: NOT_YOUR_STALL_ERROR };
+}
+
 // Every transition writes both the orders row itself and a row in
 // order_status_history -- that history table used to be write-only (rows
 // went in on approve/reject but nothing ever read them back); the order
-// detail cards in ./page.tsx now render it as a simple timeline.
+// detail cards in ./page.tsx and the vendor Tracker now both render it as
+// a simple timeline.
 //
 // reviewed_by/reviewed_at are only stamped on the actual review step
 // (approve/reject), not on later fulfillment transitions (shipped,
 // delivered, etc) -- they record who made the approve/reject call, not
-// "whoever last touched this order." Fulfillment is centralized to one
-// admin (see app/vendor/label/[orderId]/page.tsx's RETURN_ADDRESS comment),
-// so every transition here stays admin-only, same as approve/reject always
-// were.
+// "whoever last touched this order."
 async function transitionOrderStatus(orderId: string, status: OrderStatus): Promise<ActionState> {
-  const session = await getSessionRole();
-  if (session?.role !== "admin") redirect("/admin/login");
-
   const supabase = createAdminClient();
+  const auth = await authorizeOrderAction(supabase, orderId);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
   const isReviewStep = status === "approved" || status === "rejected";
 
   const updates: { status: OrderStatus; reviewed_at?: string; reviewed_by?: string | null } = { status };
@@ -71,10 +105,10 @@ export async function approveOrder(formData: FormData): Promise<ActionState> {
   const orderId = formData.get("orderId");
   if (typeof orderId !== "string") return { ok: false, error: "Missing order." };
 
-  const session = await getSessionRole();
-  if (session?.role !== "admin") redirect("/admin/login");
-
   const supabase = createAdminClient();
+  const auth = await authorizeOrderAction(supabase, orderId);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
   const { data: order } = await supabase
     .from("orders")
     .select("order_number, customer_email")
@@ -109,10 +143,10 @@ export async function rejectOrder(formData: FormData): Promise<ActionState> {
   const orderId = formData.get("orderId");
   if (typeof orderId !== "string") return { ok: false, error: "Missing order." };
 
-  const session = await getSessionRole();
-  if (session?.role !== "admin") redirect("/admin/login");
-
   const supabase = createAdminClient();
+  const auth = await authorizeOrderAction(supabase, orderId);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
   const { data: existing } = await supabase
     .from("orders")
     .select("status, order_number, customer_email")

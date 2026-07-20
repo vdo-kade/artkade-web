@@ -355,7 +355,7 @@ export default function CheckoutPage() {
                 <input
                   required
                   type="file"
-                  accept="image/*,.pdf"
+                  accept="image/*"
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                   className="w-full text-sm"
                 />

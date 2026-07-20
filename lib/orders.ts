@@ -2,6 +2,14 @@
 // dashboard's Tracker tab, same pattern as CATEGORY_LABELS in
 // lib/catalogue.ts.
 
+// Client-generated in app/checkout/page.tsx (ARTK- plus 6 digits), but
+// re-validated everywhere it's trusted server-side -- both here as the
+// single source of truth and at every call site that accepts one from a
+// request (checkout's placeOrder, the payment-proof upload route), since
+// it also doubles as a storage path segment and must never be passed
+// through unchecked.
+export const ORDER_NUMBER_PATTERN = /^ARTK-\d{6}$/;
+
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   awaiting_review: "Awaiting review",
   approved: "Approved",

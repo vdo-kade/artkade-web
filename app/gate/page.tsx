@@ -78,6 +78,18 @@ export default async function GatePage() {
           No password? Leave your email below, and you might get let in early — before anyone else finds the door.
         </p>
         <ActionForm action={submitBetaSignup} successMessage="You're on the list." resetOnSuccess>
+          {/* Honeypot -- invisible to real visitors (off-screen, unreachable
+              by tab, hidden from screen readers), but a scripted bot filling
+              every field it finds will fill this one too. See the "company"
+              check in submitBetaSignup. */}
+          <input
+            type="text"
+            name="company"
+            tabIndex={-1}
+            autoComplete="off"
+            aria-hidden="true"
+            style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }}
+          />
           <label
             htmlFor="gate-email"
             className="block text-left font-mono text-xs uppercase tracking-eyebrow text-warm-grey mb-2"

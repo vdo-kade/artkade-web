@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { GATE_COOKIE_NAME, getExpectedGateCookieValue } from "@/lib/gate";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import type { ActionState } from "@/lib/action-state";
 
 // The only place SITE_GATE_PASSWORD is ever compared -- entirely
@@ -13,6 +14,14 @@ export async function enterGate(formData: FormData): Promise<ActionState> {
   const password = formData.get("password");
   if (typeof password !== "string" || !password) {
     return { ok: false, error: "Enter the password." };
+  }
+
+  // Rate-limited before the comparison even happens -- a single password
+  // to guard, so the real risk is a script brute-forcing it, not a normal
+  // user mistyping a few times.
+  const ip = await getClientIp();
+  if (!checkRateLimit(`gate:${ip}`, 10, 10 * 60 * 1000)) {
+    return { ok: false, error: "Too many attempts. Please try again later." };
   }
 
   const expected = process.env.SITE_GATE_PASSWORD;
@@ -51,9 +60,22 @@ export async function enterGate(formData: FormData): Promise<ActionState> {
 // end to end despite it). Routing this specific write through service-role
 // sidesteps that open question entirely rather than depending on it.
 export async function submitBetaSignup(formData: FormData): Promise<ActionState> {
+  // Honeypot: a field real visitors never see or fill (styled off-screen
+  // in the form), so anything non-empty here is a bot filling every field
+  // it finds. Report success without writing anything, so the bot has no
+  // signal to adapt against.
+  if (typeof formData.get("company") === "string" && formData.get("company") !== "") {
+    return { ok: true };
+  }
+
   const email = formData.get("email");
   if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { ok: false, error: "Enter a valid email." };
+  }
+
+  const ip = await getClientIp();
+  if (!checkRateLimit(`beta-signup:${ip}`, 5, 60 * 60 * 1000)) {
+    return { ok: false, error: "Too many attempts. Please try again later." };
   }
 
   const supabase = createAdminClient();

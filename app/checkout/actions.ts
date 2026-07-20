@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { decrementStock, restoreStock } from "@/lib/stock";
+import { paymentProofExists } from "@/lib/storage";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { ORDER_NUMBER_PATTERN } from "@/lib/orders";
 import {
   computeTotalWeightGrams,
   determineShippingMethod,
@@ -70,8 +73,29 @@ export async function placeOrder(input: {
   if (typeof input.paymentProofPath !== "string" || !input.paymentProofPath) {
     return { ok: false, error: "Missing payment proof." };
   }
-  if (typeof input.orderNumber !== "string" || !/^ARTK-\d{6}$/.test(input.orderNumber)) {
+  if (typeof input.orderNumber !== "string" || !ORDER_NUMBER_PATTERN.test(input.orderNumber)) {
     return { ok: false, error: "Invalid order reference." };
+  }
+
+  // Placing an order reserves real stock (see decrementStock below), and
+  // that reservation is only ever released by an admin manually rejecting
+  // the order -- there's no automatic expiry for stale awaiting_review
+  // orders. Rate-limit before any of that happens, so scripted spam can't
+  // lock up stock or flood the admin queue.
+  const ip = await getClientIp();
+  if (!checkRateLimit(`checkout:${ip}`, 5, 60 * 60 * 1000)) {
+    return { ok: false, error: "Too many orders placed recently. Please try again later." };
+  }
+
+  const supabase = createAdminClient();
+
+  // paymentProofPath is just a client-submitted string -- nothing before
+  // this point ties it to a real upload. Without this check, a request
+  // could skip /api/upload-payment-proof entirely and name any path,
+  // making order spam trivial (no file, no upload-side rate limit hit).
+  const proofExists = await paymentProofExists(supabase, input.paymentProofPath);
+  if (!proofExists) {
+    return { ok: false, error: "We couldn't find your payment proof upload. Please re-upload and try again." };
   }
 
   // Merge duplicate variant lines and drop anything malformed -- never
@@ -84,8 +108,6 @@ export async function placeOrder(input: {
     requested.set(item.variantId, (requested.get(item.variantId) ?? 0) + quantity);
   }
   if (requested.size === 0) return { ok: false, error: "Your bag is empty." };
-
-  const supabase = createAdminClient();
 
   const { data: variants, error: variantsError } = await supabase
     .from("product_variants")

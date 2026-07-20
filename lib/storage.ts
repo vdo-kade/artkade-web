@@ -1,5 +1,26 @@
 import type { createAdminClient } from "./supabase-admin";
 
+// Payment proof paths are client-submitted to placeOrder (see
+// app/checkout/actions.ts) after a separate upload call to
+// /api/upload-payment-proof -- nothing stops a request from skipping that
+// upload and just naming an arbitrary path instead, since there was never
+// anything checking the two actually correspond. This is what closes that
+// gap: a real object under that exact key in the private bucket, not just
+// a plausible-looking string. Objects sit flat at the bucket root (no
+// subfolders -- see the route's own path convention), so listing the root
+// with a search filter is enough; no need to walk a directory tree.
+export async function paymentProofExists(
+  supabase: ReturnType<typeof createAdminClient>,
+  path: string
+): Promise<boolean> {
+  const { data, error } = await supabase.storage.from("payment-proofs").list("", { search: path, limit: 1 });
+  if (error) {
+    console.error("Failed to verify payment proof exists:", error);
+    return false;
+  }
+  return (data ?? []).some((f) => f.name === path);
+}
+
 const PHOTO_FIELDS = ["logo_url", "hero_image_url"] as const;
 export type PhotoField = (typeof PHOTO_FIELDS)[number];
 

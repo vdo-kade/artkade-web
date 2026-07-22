@@ -12,10 +12,14 @@ export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB -- plain image uploads
 
 // Freebies are deliberately not image-only (wallpapers, but also ringtones,
 // music, ebooks/zines -- see the freebie_category enum in
-// supabase/schema.sql and lib/storage.ts's own comment on uploadFreebieFile).
-// A real, larger cap and a wider signature allowlist than "must be a photo",
-// but still real byte-signature sniffing, not a trust-the-content-type pass.
-export const MAX_FREEBIE_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
+// supabase/schema.sql and lib/storage.ts's own comment on uploadValidatedFreebieFile).
+// A wider signature allowlist than "must be a photo", but still real
+// byte-signature sniffing, not a trust-the-content-type pass. Capped at the
+// same 10MB as next.config.js's serverActions.bodySizeLimit -- that's the
+// actual ceiling a freebie upload can ever reach in production (Vercel 413s
+// anything larger before this check even runs), so there's no point letting
+// this constant imply a higher cap the platform won't honor.
+export const MAX_FREEBIE_UPLOAD_BYTES = MAX_UPLOAD_BYTES; // 10MB, same as the Server Action body limit
 
 export type FileSignature = { mime: string; ext: string; check: (bytes: Uint8Array) => boolean };
 

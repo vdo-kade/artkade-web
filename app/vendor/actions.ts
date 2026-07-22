@@ -8,8 +8,8 @@ import { getSessionRole } from "@/lib/session-role";
 import { CATEGORY_ORDER } from "@/lib/catalogue";
 import { defaultWeightGrams } from "@/lib/shipping";
 import { FREEBIE_CATEGORY_ORDER } from "@/lib/freebies";
-import { uploadStallPhotoFile, uploadFreebieFile, type PhotoField } from "@/lib/storage";
-import { validateUpload } from "@/lib/image-validation";
+import { uploadStallPhotoFile, uploadValidatedFreebieFile, type PhotoField } from "@/lib/storage";
+import { validateUpload, type UploadValidationResult } from "@/lib/image-validation";
 import { runPopupLifecycleTick } from "@/lib/popup-expiry";
 import type { ActionState } from "@/lib/action-state";
 
@@ -437,6 +437,20 @@ export async function createFreebie(formData: FormData): Promise<ActionState> {
     return { ok: false, error: "Choose a file to upload." };
   }
 
+  // Validate the file AND the (optional) thumbnail before uploading either
+  // one -- an invalid thumbnail failing after the file was already uploaded
+  // would leave that file orphaned in storage with no freebie row ever
+  // created to point at it.
+  const fileValidation = await validateUpload(file, "freebie");
+  if (!fileValidation.ok) return { ok: false, error: fileValidation.error };
+
+  let thumbnailValidation: Extract<UploadValidationResult, { ok: true }> | null = null;
+  if (thumbnail instanceof File && thumbnail.size > 0) {
+    const validated = await validateUpload(thumbnail, "image");
+    if (!validated.ok) return { ok: false, error: validated.error };
+    thumbnailValidation = validated;
+  }
+
   const supabase = createAdminClient();
   const { data: artist } = await supabase
     .from("artists")
@@ -445,12 +459,12 @@ export async function createFreebie(formData: FormData): Promise<ActionState> {
     .maybeSingle();
   if (!artist) return { ok: false, error: "Stall not found." };
 
-  const uploadedFile = await uploadFreebieFile(supabase, artist.slug, "file", file);
+  const uploadedFile = await uploadValidatedFreebieFile(supabase, artist.slug, "file", fileValidation);
   if (!uploadedFile.ok) return { ok: false, error: uploadedFile.error };
 
   let thumbnailUrl: string | null = null;
-  if (thumbnail instanceof File && thumbnail.size > 0) {
-    const uploadedThumbnail = await uploadFreebieFile(supabase, artist.slug, "thumbnail", thumbnail);
+  if (thumbnailValidation) {
+    const uploadedThumbnail = await uploadValidatedFreebieFile(supabase, artist.slug, "thumbnail", thumbnailValidation);
     if (!uploadedThumbnail.ok) return { ok: false, error: uploadedThumbnail.error };
     thumbnailUrl = uploadedThumbnail.url;
   }

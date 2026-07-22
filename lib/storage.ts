@@ -1,5 +1,5 @@
 import type { createAdminClient } from "./supabase-admin";
-import { validateUpload } from "./image-validation";
+import { validateUpload, type UploadValidationResult } from "./image-validation";
 
 export type StorageUploadResult = { ok: true; url: string } | { ok: false; error: string };
 
@@ -49,15 +49,16 @@ export type PhotoField = (typeof PHOTO_FIELDS)[number];
 // the content type, not whatever label the browser's File.type sent --
 // same reasoning as /api/upload-payment-proof, now applied here too instead
 // of trusting the client's claim.
-export async function uploadFreebieFile(
+// Split from validation on purpose -- createFreebie validates the file AND
+// the (optional) thumbnail up front, before uploading either, so an invalid
+// thumbnail can't leave an already-uploaded file orphaned in storage with no
+// freebie row ever pointing at it.
+export async function uploadValidatedFreebieFile(
   supabase: ReturnType<typeof createAdminClient>,
   slug: string,
   kind: "file" | "thumbnail",
-  file: File
+  validated: Extract<UploadValidationResult, { ok: true }>
 ): Promise<StorageUploadResult> {
-  const validated = await validateUpload(file, kind === "thumbnail" ? "image" : "freebie");
-  if (!validated.ok) return validated;
-
   const path = `freebies/${slug}/${kind}-${Date.now()}.${validated.ext}`;
 
   const { error: uploadError } = await supabase.storage

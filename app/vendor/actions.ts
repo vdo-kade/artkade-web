@@ -398,10 +398,19 @@ export async function deleteProduct(formData: FormData): Promise<ActionState> {
   // delete fails there rather than silently orphaning order history. Surface
   // that as a real message now instead of swallowing it -- the vendor can
   // still archive it instead via the "Active" checkbox.
-  const { error } = await query;
+  //
+  // .select("id") is the only way to tell "actually deleted a row" apart
+  // from "matched nothing" -- delete() with no error and no matching row
+  // (e.g. a vendor's artist_id filter excluding a product that belongs to
+  // another stall) otherwise returns the exact same {error: null} as a real
+  // delete, which was silently reporting ok:true for a no-op.
+  const { data, error } = await query.select("id");
   if (error) {
     console.error("Failed to delete product:", error);
     return { ok: false, error: "Couldn't delete -- it may already have orders. Try archiving it instead." };
+  }
+  if (!data || data.length === 0) {
+    return { ok: false, error: "Product not found." };
   }
 
   revalidatePath("/vendor");
@@ -504,10 +513,16 @@ export async function deleteFreebie(formData: FormData): Promise<ActionState> {
   if (session.role === "vendor") {
     query = query.eq("artist_id", session.artistId);
   }
-  const { error } = await query;
+  // .select("id") is the only way to tell "actually deleted a row" apart
+  // from "matched nothing" -- see deleteProduct's own comment on this same
+  // pattern above.
+  const { data, error } = await query.select("id");
   if (error) {
     console.error("Failed to delete freebie:", error);
     return { ok: false, error: "Something went wrong. Check server logs." };
+  }
+  if (!data || data.length === 0) {
+    return { ok: false, error: "Freebie not found." };
   }
 
   revalidatePath("/vendor");

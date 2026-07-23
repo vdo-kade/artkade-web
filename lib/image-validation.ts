@@ -7,29 +7,32 @@
 // photos, stall logo/hero, freebie file + thumbnail, magazine hero) now
 // goes through the same validateUpload() below rather than each
 // reimplementing its own size/type check.
-
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB -- plain image uploads
+//
+// Capped well under Vercel's hard, non-configurable Serverless Function
+// request-body ceiling (~4.3MB, the well-known Lambda-payload-derived
+// limit) -- same wall MAX_FREEBIE_UPLOAD_BYTES below was tuned against,
+// confirmed by the same live testing (a 4MB upload succeeds, 4.4MB+ never
+// even reaches this check, it just 413s straight from Vercel's infra
+// before any app code runs, whether the request is a Server Action or an
+// API route -- the ceiling is a platform-level Lambda invocation limit,
+// not something next.config.js's bodySizeLimit controls). This applies to
+// every path through validateUpload(file, "image"): product photos, stall
+// logo/hero, magazine hero, and payment-proof screenshots. 4MB keeps every
+// accepted-and-then-rejected file safely on the near side of that wall, so
+// an oversized upload shows this function's own clean error instead of
+// Vercel's raw "FUNCTION_PAYLOAD_TOO_LARGE" page. Anything bigger than
+// Vercel's hard ceiling will still show that raw page no matter what this
+// constant says -- only a direct-to-storage upload (bypassing the request
+// body entirely) could remove that wall.
+export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024; // 4MB -- plain image uploads
 
 // Freebies are deliberately not image-only (wallpapers, but also ringtones,
 // music, ebooks/zines -- see the freebie_category enum in
 // supabase/schema.sql and lib/storage.ts's own comment on uploadValidatedFreebieFile).
 // A wider signature allowlist than "must be a photo", but still real
-// byte-signature sniffing, not a trust-the-content-type pass.
-//
-// Capped well under next.config.js's serverActions.bodySizeLimit (10mb) on
-// purpose: live testing against production found Vercel enforces its own
-// hard, non-configurable Serverless Function request-body ceiling (~4.3MB,
-// the well-known Lambda-payload-derived limit) *ahead* of anything
-// next.config.js can raise -- a 4MB freebie upload succeeds, 4.4MB+ never
-// even reaches this check, it just 413s straight from Vercel's infra. 4MB
-// keeps every accepted-and-then-rejected file (i.e. one this validateUpload
-// call actually gets to run on) safely on the near side of that wall, so an
-// oversized freebie shows this function's own clean error instead of
-// Vercel's raw "FUNCTION_PAYLOAD_TOO_LARGE" page. Anything bigger than
-// Vercel's hard ceiling will still show that raw page no matter what this
-// constant says -- only a direct-to-storage upload (bypassing the Server
-// Action body entirely) could remove that wall, which is a bigger change
-// than this constant can fix on its own.
+// byte-signature sniffing, not a trust-the-content-type pass. Capped at the
+// same 4MB as MAX_UPLOAD_BYTES above and for the same reason -- see that
+// constant's own comment for why.
 export const MAX_FREEBIE_UPLOAD_BYTES = 4 * 1024 * 1024; // 4MB
 
 export type FileSignature = { mime: string; ext: string; check: (bytes: Uint8Array) => boolean };

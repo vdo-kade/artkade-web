@@ -410,6 +410,16 @@ export default async function VendorDashboardPage({
   const products = productsResult.data;
   const freebies = freebiesResult.data ?? [];
 
+  // Same total-stock computation the God dashboard already does per stall
+  // (app/admin/page.tsx's stockByArtist) -- vendors never got an equivalent
+  // at-a-glance figure for their own catalogue, so the Stock tab jumped
+  // straight from the "Products & stock" heading into 30+ fully-expanded
+  // per-product edit forms with no summary at all.
+  const totalStockUnits = (products ?? []).reduce(
+    (sum, p) => sum + p.product_variants.reduce((s, v) => s + v.stock, 0),
+    0
+  );
+
   if (!artist) {
     return <div style={{ padding: 24, fontFamily: "sans-serif" }}>Stall not found.</div>;
   }
@@ -558,7 +568,13 @@ export default async function VendorDashboardPage({
       </section>
 
       <section style={card}>
-        <h2 style={{ fontSize: 18, marginBottom: 12 }}>Products &amp; stock</h2>
+        <h2 style={{ fontSize: 18, marginBottom: 4 }}>Products &amp; stock</h2>
+        {(products ?? []).length > 0 && (
+          <p style={{ fontSize: 13, color: "#666", marginBottom: 12 }}>
+            {products!.length} product{products!.length === 1 ? "" : "s"} &middot;{" "}
+            {totalStockUnits} unit{totalStockUnits === 1 ? "" : "s"} in stock
+          </p>
+        )}
         {(products ?? []).length === 0 && <p>No products for this stall yet.</p>}
         {(products ?? []).map((product) => (
           <div

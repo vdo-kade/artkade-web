@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { createClient } from "@/lib/supabase-server";
-import { LOGO_URL, LOGO_OUTLINE_FILTER_LARGE } from "@/lib/brand";
+import { LOGO_URL, LOGO_SHADOW_FILTER } from "@/lib/brand";
 import { ActionForm } from "@/components/ActionForm";
 import PolaroidBackground, { type PolaroidImage } from "@/components/PolaroidBackground";
 import { enterGate, submitBetaSignup } from "./actions";
@@ -36,12 +36,12 @@ export default async function GatePage() {
         <Image
           src={LOGO_URL}
           alt="Art Kade"
-          width={1555}
-          height={497}
+          width={1522}
+          height={478}
           sizes="(min-width: 640px) 350px, 250px"
           priority
           className="mx-auto h-20 sm:h-28 w-auto mb-8"
-          style={{ filter: LOGO_OUTLINE_FILTER_LARGE }}
+          style={{ filter: LOGO_SHADOW_FILTER }}
         />
 
         <h1 className="font-display text-3xl sm:text-4xl mb-3">Only the chosen may enter.</h1>

@@ -6,7 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useBag } from "./BagProvider";
 import SearchForm from "./SearchForm";
-import { SHORT_LOGO_URL, LOGO_OUTLINE_FILTER_SMALL } from "@/lib/brand";
+import { SHORT_LOGO_URL, LOGO_SHADOW_FILTER } from "@/lib/brand";
 
 const NAV_LINKS = [
   { href: "/#stalls", label: "The Stalls" },
@@ -40,24 +40,20 @@ export default function Header() {
         <Link href="/" className="flex items-center gap-3" onClick={() => setMenuOpen(false)}>
           {/*
             The short "AX" mark sits transparent directly on the cream
-            header (no backing plate) -- its neutral triangle-eye element
-            is pure white, ~1.1:1 against cream on its own, so a single
-            soft/ambient shadow wouldn't create a legible edge. Instead
-            LOGO_OUTLINE_FILTER_SMALL stacks several 0-blur drop-shadows in
-            a ring around the artwork's silhouette (a hard-edged pseudo-
-            stroke in `ink`, the same dark token already proven legible as
-            this site's default body-text-on-cream colour) plus one larger
-            soft shadow underneath for depth -- see lib/brand.ts.
+            header (no backing plate). The v2 artwork bakes its own black
+            outline around the silhouette, so it's legible on cream without
+            any CSS-side contrast trick -- LOGO_SHADOW_FILTER just adds
+            ordinary soft elevation (see lib/brand.ts).
           */}
           <Image
             src={SHORT_LOGO_URL}
             alt="Art Kade"
-            width={812}
-            height={712}
+            width={844}
+            height={767}
             sizes="48px"
             priority
             className="h-9 w-auto"
-            style={{ filter: LOGO_OUTLINE_FILTER_SMALL }}
+            style={{ filter: LOGO_SHADOW_FILTER }}
           />
         </Link>
         <nav className="hidden md:flex items-center gap-8 font-body text-sm">

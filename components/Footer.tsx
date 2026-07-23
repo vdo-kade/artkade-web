@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase";
-import { LOGO_URL, LOGO_OUTLINE_FILTER_SMALL } from "@/lib/brand";
+import { LOGO_URL, LOGO_SHADOW_FILTER } from "@/lib/brand";
 import SocialIcon from "./SocialIcon";
 
 type SocialLink = { label: string; url: string };
@@ -59,18 +59,17 @@ export default function Footer() {
           {/* Full logo (not the header/gate's short "AX" mark) -- the
               footer is its own brand moment, not a compact nav bar, so it
               gets the full wordmark+mark lockup. Same transparent-on-cream
-              + hard-edged-outline treatment as everywhere else the logo
-              sits directly on cream (see lib/brand.ts): the "small" filter
-              matches this rendered scale, not the homepage hero's heavier
-              one. */}
+              treatment as everywhere else the logo sits directly on cream
+              (see lib/brand.ts): the v2 artwork's baked-in outline is what
+              keeps it legible here, not the shadow. */}
           <Image
             src={LOGO_URL}
             alt="Art Kade"
-            width={1555}
-            height={497}
+            width={1522}
+            height={478}
             sizes="160px"
             className="h-9 w-auto"
-            style={{ filter: LOGO_OUTLINE_FILTER_SMALL }}
+            style={{ filter: LOGO_SHADOW_FILTER }}
           />
           <p className="mt-3 text-warm-grey max-w-xs">
             A curated Sri Lankan creative marketplace. Kade means shop.

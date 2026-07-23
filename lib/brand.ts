@@ -1,59 +1,29 @@
 // Shared between Header.tsx (small header mark) and the homepage hero
 // (large brand moment) so both point at the same Supabase Storage assets.
 export const LOGO_URL =
-  "https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/Site_assets/Logo%20on%20trans.png";
+  "https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/Site_assets/Logo%20on%20v2%20trans.png";
 
 // The short "AX" mark (same asset used for the favicon) -- used in the
 // header now that the logo sits directly on cream instead of an ink plate.
 export const SHORT_LOGO_URL =
-  "https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/Site_assets/Logo%20Short%20on%20trans.png";
+  "https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/Site_assets/Logo%20Short%20v2%20on%20trans.png";
 
 // Open Graph share image (app/layout.tsx's metadata) -- a static 1200x630
-// render of the same cream background + LOGO_OUTLINE_FILTER_LARGE
-// treatment as the homepage hero, generated via a real browser (so the
-// drop-shadow stack matches exactly) rather than reimplemented in a
-// different image pipeline. Static, not per-page dynamic: nothing here
-// changes per product/stall, so one shared image covers every link.
+// render of the same cream background as the homepage hero, generated via
+// a real browser rather than reimplemented in a different image pipeline.
+// Static, not per-page dynamic: nothing here changes per product/stall, so
+// one shared image covers every link.
 export const OG_IMAGE_URL =
   "https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/Site_assets/og-image.png";
 
 export const SITE_URL = "https://artkade.space";
 
-// Both logo assets' neutral element (the triangle-eye mark / "ART"
-// wordmark) is pure white -- ~1.1:1 contrast against this site's cream
-// (#F5EFE4), effectively invisible on its own (confirmed via computed-style
-// check). Since the artwork stays transparent (no solid backing plate), the
-// white shape's only source of definition against cream is a hard-edged
-// outline built from several 0-blur drop-shadows stacked in a ring around
-// the silhouette (not a single soft/ambient one, which doesn't create a
-// legible edge) plus one larger soft shadow underneath for depth. `ink`
-// (#1C1712) is the same dark token used for this site's default body text
-// on cream, i.e. an already-proven-legible pairing.
-//
-// The stroke offset needs to scale with the logo's own rendered size --
-// 1px reads as a crisp thin outline on the header's small mark but is
-// barely perceptible at the hero's much larger scale, so the hero gets a
-// proportionally heavier stroke rather than reusing the header's filter.
-export const LOGO_OUTLINE_FILTER_SMALL = [
-  "drop-shadow(1px 0 0 rgba(28,23,18,0.9))",
-  "drop-shadow(-1px 0 0 rgba(28,23,18,0.9))",
-  "drop-shadow(0 1px 0 rgba(28,23,18,0.9))",
-  "drop-shadow(0 -1px 0 rgba(28,23,18,0.9))",
-  "drop-shadow(1px 1px 0 rgba(28,23,18,0.9))",
-  "drop-shadow(-1px -1px 0 rgba(28,23,18,0.9))",
-  "drop-shadow(1px -1px 0 rgba(28,23,18,0.9))",
-  "drop-shadow(-1px 1px 0 rgba(28,23,18,0.9))",
-  "drop-shadow(0 6px 10px rgba(28,23,18,0.35))",
-].join(" ");
-
-export const LOGO_OUTLINE_FILTER_LARGE = [
-  "drop-shadow(2.5px 0 0 rgba(28,23,18,0.9))",
-  "drop-shadow(-2.5px 0 0 rgba(28,23,18,0.9))",
-  "drop-shadow(0 2.5px 0 rgba(28,23,18,0.9))",
-  "drop-shadow(0 -2.5px 0 rgba(28,23,18,0.9))",
-  "drop-shadow(2.5px 2.5px 0 rgba(28,23,18,0.9))",
-  "drop-shadow(-2.5px -2.5px 0 rgba(28,23,18,0.9))",
-  "drop-shadow(2.5px -2.5px 0 rgba(28,23,18,0.9))",
-  "drop-shadow(-2.5px 2.5px 0 rgba(28,23,18,0.9))",
-  "drop-shadow(0 14px 26px rgba(28,23,18,0.4))",
-].join(" ");
+// v2 artwork carries its own baked-in black outline around every glyph
+// (unlike the v1 assets, whose neutral triangle-eye/wordmark elements were
+// pure white -- ~1.1:1 against this site's cream (#F5EFE4) and needed a
+// hard-edged stacked-drop-shadow CSS outline just to read against the
+// background). That outline is now part of the art itself, so the only
+// thing this filter needs to add is ordinary elevation -- one soft, low-
+// opacity shadow, applied at the same value regardless of the logo's
+// rendered size (no more small/large split for stroke-width scaling).
+export const LOGO_SHADOW_FILTER = "drop-shadow(0 4px 10px rgba(28,23,18,0.18))";

@@ -15,6 +15,7 @@ export type Product = {
   name: string;
   imageUrl?: string;
   priceLabel: string; // e.g. "from Rs. 1,000"
+  sizeLabel?: string; // e.g. "A6–A3" / "Small–Large" -- prints & stickers only
   stockRemaining?: number; // undefined = not tracked (digital/freebie)
   isBestseller?: boolean;
   isOneOff?: boolean;
@@ -65,6 +66,9 @@ export default function ProductCard({ product }: { product: Product }) {
             </span>
           ) : null}
         </div>
+        {product.sizeLabel && (
+          <p className="mt-0.5 text-xs text-warm-grey font-mono">{product.sizeLabel}</p>
+        )}
         {product.dropEndsAt && !soldOut && (
           <p className="mt-1 text-accent">
             <Countdown endsAt={product.dropEndsAt} />

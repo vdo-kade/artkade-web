@@ -45,6 +45,26 @@ export function formatPriceLabel(variants: VariantRow[]): string {
   return variants.length > 1 ? `from ${formatted}` : formatted;
 }
 
+// Sticker labels carry a material suffix ("Small, sticker paper
+// laminated") that belongs on the product detail page, not the card --
+// only the leading size word is shown here.
+function shortSizeLabel(label: string): string {
+  return label.split(",")[0].trim();
+}
+
+// Card-level size hint for prints/stickers only (the two categories vendor
+// beta feedback flagged as confusing with price alone) -- cheapest variant's
+// size through the priciest's, e.g. "A6–A3" or "Small–Large", collapsing to
+// a single tier when there's only one variant or they share a size label.
+export function formatSizeLabel(category: string, variants: VariantRow[]): string | undefined {
+  if (category !== "print" && category !== "sticker_pack") return undefined;
+  if (variants.length === 0) return undefined;
+  const sorted = [...variants].sort((a, b) => a.price - b.price);
+  const min = shortSizeLabel(sorted[0].label);
+  const max = shortSizeLabel(sorted[sorted.length - 1].label);
+  return min === max ? min : `${min}–${max}`;
+}
+
 export function mapProduct(row: ProductRow): Product {
   return {
     id: row.id,
@@ -52,6 +72,7 @@ export function mapProduct(row: ProductRow): Product {
     name: row.name,
     imageUrl: row.image_url ?? undefined,
     priceLabel: formatPriceLabel(row.product_variants),
+    sizeLabel: formatSizeLabel(row.category, row.product_variants),
     stockRemaining: row.product_variants.reduce((sum, v) => sum + v.stock, 0),
     isBestseller: row.is_bestseller,
     isOneOff: row.is_one_off,

@@ -63,7 +63,7 @@ export default function ProductDetail({ product }: { product: ProductDetailData 
                 variants={product.variants}
               />
             )}
-            {isApparel && <SizeGuideButton />}
+            {isApparel && <SizeGuideButton customImageUrl={product.sizingChartUrl} />}
           </div>
 
           {soldOut && (

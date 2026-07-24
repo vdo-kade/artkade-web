@@ -299,6 +299,8 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   const isActive = formData.get("isActive") === "on";
   const isOneOff = formData.get("isOneOff") === "on";
   const file = formData.get("photo");
+  const sizingChartFile = formData.get("sizingChartPhoto");
+  const removeSizingChart = formData.get("removeSizingChart") === "on";
   if (typeof productId !== "string") return { ok: false, error: "Missing product." };
   if (typeof name !== "string" || !name.trim()) return { ok: false, error: "Name is required." };
   if (typeof category !== "string" || !CATEGORY_ORDER.includes(category)) {
@@ -327,6 +329,18 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
     imageUrl = uploaded.url;
   }
 
+  // Per-product sizing chart override (tshirt-only in the UI, but not
+  // enforced here -- a new upload always wins over the "remove" checkbox,
+  // and the checkbox only matters when nothing new was uploaded.
+  let sizingChartUrl: string | null | undefined;
+  if (sizingChartFile instanceof File && sizingChartFile.size > 0) {
+    const uploaded = await uploadProductPhoto(supabase, existing.artists.slug, sizingChartFile);
+    if (!uploaded.ok) return { ok: false, error: uploaded.error };
+    sizingChartUrl = uploaded.url;
+  } else if (removeSizingChart) {
+    sizingChartUrl = null;
+  }
+
   const { error } = await supabase
     .from("products")
     .update({
@@ -336,6 +350,7 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
       is_active: isActive,
       is_one_off: isOneOff,
       ...(imageUrl ? { image_url: imageUrl } : {}),
+      ...(sizingChartUrl !== undefined ? { sizing_chart_url: sizingChartUrl } : {}),
     })
     .eq("id", productId);
   if (error) {

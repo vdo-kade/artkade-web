@@ -138,6 +138,10 @@ export type ProductDetail = {
   variants: ProductVariant[];
   stallName: string;
   stallSlug: string;
+  // Per-product sizing chart override -- see lib/sizing.ts. Null/undefined
+  // means "use the site-wide default table" (SizeGuideButton handles the
+  // fallback).
+  sizingChartUrl?: string;
 };
 
 type ProductDetailRow = {
@@ -150,13 +154,14 @@ type ProductDetailRow = {
   is_one_off: boolean;
   sold_count: number;
   drop_ends_at: string | null;
+  sizing_chart_url: string | null;
   product_variants: VariantRow[];
   product_images: { url: string; sort_order: number }[];
   artists: { slug: string; name: string; is_active: boolean } | null;
 };
 
 const PRODUCT_DETAIL_SELECT =
-  "id, name, slug, description, category, image_url, is_one_off, sold_count, drop_ends_at, product_variants(id, label, price, stock, edition_size), product_images(url, sort_order), artists(slug, name, is_active)";
+  "id, name, slug, description, category, image_url, is_one_off, sold_count, drop_ends_at, sizing_chart_url, product_variants(id, label, price, stock, edition_size), product_images(url, sort_order), artists(slug, name, is_active)";
 
 // Shared by both the real product page (app/stalls/[slug]/products/
 // [productSlug]/page.tsx) and its intercepted-route modal counterpart --
@@ -192,6 +197,7 @@ export async function getProductDetail(
     isOneOff: data.is_one_off,
     soldCount: data.sold_count,
     dropEndsAt: data.drop_ends_at ?? undefined,
+    sizingChartUrl: data.sizing_chart_url ?? undefined,
     images: gallery.length > 0 ? gallery : data.image_url ? [{ src: data.image_url, alt: data.name }] : [],
     variants: data.product_variants.map((v) => ({
       id: v.id,

@@ -52,6 +52,7 @@ type ProductRow = {
   is_active: boolean;
   is_one_off: boolean;
   sold_count: number;
+  sizing_chart_url: string | null;
   product_variants: VariantRow[];
 };
 
@@ -206,6 +207,42 @@ function ProductEditCard({ product }: { product: ProductRow }) {
         <label style={{ fontSize: 12, color: "#666" }}>Replace photo</label>
         <input style={{ marginBottom: 12, fontSize: 12 }} type="file" name="photo" accept="image/*" />
 
+        {product.category === "tshirt" && (
+          <div style={{ border: "1px solid #eee", borderRadius: 4, padding: 8, marginBottom: 12 }}>
+            <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>
+              Sizing chart
+            </label>
+            {product.sizing_chart_url ? (
+              <>
+                <Image
+                  src={product.sizing_chart_url}
+                  alt="Custom sizing chart"
+                  width={320}
+                  height={400}
+                  sizes="100px"
+                  style={{ width: "auto", height: "auto", maxWidth: 100, maxHeight: 100, marginBottom: 6, border: "1px solid #ccc" }}
+                />
+                <p style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>
+                  Using a custom chart for this product instead of the site default.
+                </p>
+                <label style={{ display: "block", marginBottom: 6, fontSize: 13 }}>
+                  <input type="checkbox" name="removeSizingChart" /> Remove custom chart (revert to
+                  site default)
+                </label>
+              </>
+            ) : (
+              <p style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>
+                Using the site default sizing chart. Upload an image below to override it for this
+                product only.
+              </p>
+            )}
+            <label style={{ fontSize: 12, color: "#666" }}>
+              {product.sizing_chart_url ? "Replace" : "Upload"} custom sizing chart image
+            </label>
+            <input style={{ fontSize: 12 }} type="file" name="sizingChartPhoto" accept="image/*" />
+          </div>
+        )}
+
         <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
           <input type="checkbox" name="isActive" defaultChecked={product.is_active} /> Active
           (visible on the stall)
@@ -313,7 +350,7 @@ export default async function VendorDashboardPage({
     supabase
       .from("products")
       .select(
-        "id, category, name, description, image_url, is_active, is_one_off, sold_count, product_variants(id, label, price, stock)"
+        "id, category, name, description, image_url, is_active, is_one_off, sold_count, sizing_chart_url, product_variants(id, label, price, stock)"
       )
       .eq("artist_id", selectedArtistId)
       .order("sort_order")

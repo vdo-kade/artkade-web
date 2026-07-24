@@ -71,6 +71,13 @@ create table products (
   sort_order int not null default 0,
   drop_ends_at timestamptz,                    -- optional countdown for a limited drop on this item
   is_active boolean not null default true,
+  -- Per-product override for the apparel sizing chart shown via the "?"
+  -- icon next to the size selector (see lib/sizing.ts and
+  -- SizeGuideButton). Null (the common case) means "use the site-wide
+  -- default measurement table" -- only relevant for category = 'tshirt',
+  -- but not constrained to it at the DB level since a future apparel-like
+  -- category might want the same override.
+  sizing_chart_url text,
   created_at timestamptz not null default now()
 );
 

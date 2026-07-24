@@ -68,11 +68,6 @@ export default function ExpandableImage({
     return <div className={frameClassName}>{placeholder}</div>;
   }
 
-  function openAt(i: number) {
-    setIndex(i);
-    setOpen(true);
-  }
-
   function next(e?: { stopPropagation: () => void }) {
     e?.stopPropagation();
     setIndex((i) => (i + 1) % images.length);
@@ -97,21 +92,52 @@ export default function ExpandableImage({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => openAt(0)}
-        aria-label={`View ${images[0].alt} full size`}
-        className={`block w-full text-left cursor-zoom-in ${frameClassName ?? ""}`}
-      >
-        <Image
-          src={images[0].src}
-          alt={images[0].alt}
-          width={1200}
-          height={1500}
-          sizes={sizes}
-          className={`block w-full h-auto ${className ?? ""}`}
-        />
-      </button>
+      <div className={`relative w-full ${frameClassName ?? ""}`}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={`View ${images[index].alt} full size`}
+          className="block w-full text-left cursor-zoom-in"
+        >
+          <Image
+            src={images[index].src}
+            alt={images[index].alt}
+            width={1200}
+            height={1500}
+            sizes={sizes}
+            className={`block w-full h-auto ${className ?? ""}`}
+          />
+        </button>
+
+        {/* Corner thumbnail strip -- Amazon/Daraz-style gallery indicator so
+            a multi-photo product/post is visibly a gallery before anyone
+            opens the lightbox, and lets them jump straight to an image
+            without it. Only worth showing once there's an actual choice to
+            make; single-image callers (every ProductCard/MagazineCard today)
+            never hit this branch. */}
+        {images.length > 1 && (
+          <div className="absolute bottom-2 right-2 flex gap-1 bg-white/90 p-1">
+            {images.map((img, i) => (
+              <button
+                key={img.src + i}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIndex(i);
+                }}
+                aria-label={`View image ${i + 1} of ${images.length}`}
+                aria-current={i === index}
+                className={`relative w-8 h-8 shrink-0 overflow-hidden border ${
+                  i === index ? "border-ink" : "border-line/70 opacity-70 hover:opacity-100"
+                } transition-opacity`}
+              >
+                <Image src={img.src} alt="" fill sizes="32px" className="object-cover" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {open &&
         createPortal(

@@ -2,12 +2,18 @@ import Link from "next/link";
 import Countdown from "./Countdown";
 import AddToBagButton from "./AddToBagButton";
 import ExpandableImage from "./ExpandableImage";
+import EditionBadge from "./EditionBadge";
 
 export type ProductVariant = {
   id: string;
   label: string;
   price: number;
   stock: number;
+  // Fixed run size for this variant's live countdown badge -- see
+  // EditionBadge. Undefined means this variant isn't a limited run
+  // (stickers, digital, freebies, or a product using the separate,
+  // always-1 isOneOff system instead).
+  editionSize?: number;
 };
 
 export type Product = {
@@ -30,6 +36,17 @@ export type Product = {
 export default function ProductCard({ product }: { product: Product }) {
   const soldOut = product.stockRemaining !== undefined && product.stockRemaining <= 0;
 
+  // A single-variant limited-run product (the common case -- most prints
+  // only ever have one size) has one unambiguous fraction to show in this
+  // corner. A multi-variant product (e.g. A6/A5/A3, each its own run) has
+  // no single number that represents all of them, so the card falls back
+  // to its existing aggregate "Only N left" line below and the real
+  // per-variant breakdown lives on the product detail page instead.
+  const editionVariant =
+    !product.isOneOff && product.variants?.length === 1 && product.variants[0].editionSize != null
+      ? product.variants[0]
+      : undefined;
+
   return (
     <div
       className={`group relative min-w-0 bg-white border border-line p-3 pb-5 rotate-[-0.6deg] hover:rotate-0 transition-transform ${
@@ -45,6 +62,13 @@ export default function ProductCard({ product }: { product: Product }) {
         <span className="absolute -top-2 right-3 bg-accent text-white text-[10px] font-mono uppercase tracking-wide px-2 py-1">
           1 of 1
         </span>
+      )}
+      {editionVariant && (
+        <EditionBadge
+          stock={editionVariant.stock}
+          editionSize={editionVariant.editionSize!}
+          className="absolute -top-2 right-3"
+        />
       )}
 
       {/* the "polaroid" frame: white border, image at its own natural
@@ -70,9 +94,9 @@ export default function ProductCard({ product }: { product: Product }) {
           <span className="font-mono">{product.priceLabel}</span>
           {soldOut ? (
             <span className="font-mono text-xs uppercase text-warm-grey">
-              {product.isOneOff ? "Sold, won't return" : "Sold out"}
+              {product.isOneOff || editionVariant ? "Sold, won't return" : "Sold out"}
             </span>
-          ) : product.isOneOff ? null : product.stockRemaining !== undefined && product.stockRemaining <= 10 ? (
+          ) : product.isOneOff || editionVariant ? null : product.stockRemaining !== undefined && product.stockRemaining <= 10 ? (
             <span className="font-mono text-xs text-accent">
               Only {product.stockRemaining} left
             </span>

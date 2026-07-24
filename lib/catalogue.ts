@@ -2,7 +2,7 @@ import type { Product, ProductVariant } from "@/components/ProductCard";
 import type { Stall } from "@/components/StallCard";
 import { createClient } from "./supabase-server";
 
-type VariantRow = { id: string; label: string; price: number; stock: number };
+type VariantRow = { id: string; label: string; price: number; stock: number; edition_size: number | null };
 
 type ProductRow = {
   id: string;
@@ -38,7 +38,7 @@ export type ArtistWithProducts = ArtistRow & {
 // Shared select fragment so the landing page's flat product list and the
 // stall page's nested `artists.products` query stay in sync.
 export const PRODUCT_SELECT =
-  "id, artist_id, name, slug, category, image_url, is_bestseller, is_one_off, sold_count, sort_order, drop_ends_at, product_variants(id, label, price, stock)";
+  "id, artist_id, name, slug, category, image_url, is_bestseller, is_one_off, sold_count, sort_order, drop_ends_at, product_variants(id, label, price, stock, edition_size)";
 
 export function formatPriceLabel(variants: VariantRow[]): string {
   if (variants.length === 0) return "";
@@ -94,6 +94,7 @@ export function mapProduct(row: ProductRow, stallSlug: string): Product {
       label: v.label,
       price: v.price,
       stock: v.stock,
+      editionSize: v.edition_size ?? undefined,
     })),
   };
 }
@@ -155,7 +156,7 @@ type ProductDetailRow = {
 };
 
 const PRODUCT_DETAIL_SELECT =
-  "id, name, slug, description, category, image_url, is_one_off, sold_count, drop_ends_at, product_variants(id, label, price, stock), product_images(url, sort_order), artists(slug, name, is_active)";
+  "id, name, slug, description, category, image_url, is_one_off, sold_count, drop_ends_at, product_variants(id, label, price, stock, edition_size), product_images(url, sort_order), artists(slug, name, is_active)";
 
 // Shared by both the real product page (app/stalls/[slug]/products/
 // [productSlug]/page.tsx) and its intercepted-route modal counterpart --
@@ -192,7 +193,13 @@ export async function getProductDetail(
     soldCount: data.sold_count,
     dropEndsAt: data.drop_ends_at ?? undefined,
     images: gallery.length > 0 ? gallery : data.image_url ? [{ src: data.image_url, alt: data.name }] : [],
-    variants: data.product_variants,
+    variants: data.product_variants.map((v) => ({
+      id: v.id,
+      label: v.label,
+      price: v.price,
+      stock: v.stock,
+      editionSize: v.edition_size ?? undefined,
+    })),
     stallName: data.artists.name,
     stallSlug: data.artists.slug,
   };

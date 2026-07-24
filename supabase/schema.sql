@@ -90,7 +90,17 @@ create table product_variants (
   -- category/size (see lib/shipping.ts's defaultWeightGrams) both in the
   -- one-time backfill and going forward whenever a vendor adds/edits a
   -- variant (see app/vendor/actions.ts).
-  weight_grams int
+  weight_grams int,
+  -- Original run size for this specific variant's live countdown badge
+  -- ("N of edition_size left") -- the generalized, per-variant sibling of
+  -- products.is_one_off (which stays its own separate always-1 system).
+  -- Null means this variant isn't a limited run at all (stickers, digital,
+  -- freebies, or any print/tshirt variant that predates this system and
+  -- hasn't been assigned one). `stock` is still the single source of truth
+  -- for remaining count -- it already decrements on every sale regardless
+  -- of edition_size, so the badge is just `stock` read against this fixed
+  -- denominator, not a separately tracked counter.
+  edition_size int
 );
 
 -- Product detail page's image gallery. products.image_url (the card

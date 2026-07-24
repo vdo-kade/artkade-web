@@ -5,6 +5,7 @@ import ExpandableImage from "./ExpandableImage";
 import SizeGuideButton from "./SizeGuideButton";
 import ViewTracker from "./ViewTracker";
 import RecentlyViewed from "./RecentlyViewed";
+import EditionBadge from "./EditionBadge";
 import type { ProductDetail as ProductDetailData } from "@/lib/catalogue";
 
 // Shared by both the real page (app/stalls/[slug]/products/[productSlug])
@@ -79,11 +80,12 @@ export default function ProductDetail({ product }: { product: ProductDetailData 
             <p className="mt-6 text-warm-grey whitespace-pre-line">{product.description}</p>
           )}
 
-          {/* Material/size info for prints -- the actual per-tier price+stock
-              breakdown, since that's the only real size/material data this
-              catalogue has (no separate material field exists). Stickers and
-              other categories rely on the variant selector above for that. */}
-          {isPrint && product.variants.length > 0 && (
+          {/* Per-tier price+stock breakdown for prints (the only real
+              size/material data this catalogue has, no separate material
+              field exists) and t-shirts (each size is its own limited run --
+              see EditionBadge). Stickers and other categories rely on the
+              variant selector above instead. */}
+          {(isPrint || isApparel) && product.variants.length > 0 && (
             <div className="mt-6">
               <p className="font-mono text-xs uppercase tracking-eyebrow text-warm-grey mb-2">
                 Available sizes
@@ -92,12 +94,17 @@ export default function ProductDetail({ product }: { product: ProductDetailData 
                 {product.variants.map((v) => (
                   <li
                     key={v.id}
-                    className="flex justify-between border-b border-line/60 py-1.5"
+                    className="flex justify-between items-center gap-3 border-b border-line/60 py-1.5"
                   >
                     <span>{v.label}</span>
-                    <span className="font-mono text-warm-grey">
-                      Rs. {v.price.toLocaleString("en-US")}
-                      {v.stock <= 0 ? " · sold out" : ""}
+                    <span className="flex items-center gap-2">
+                      <span className="font-mono text-warm-grey">
+                        Rs. {v.price.toLocaleString("en-US")}
+                        {v.editionSize == null && v.stock <= 0 ? " · sold out" : ""}
+                      </span>
+                      {v.editionSize != null && (
+                        <EditionBadge stock={v.stock} editionSize={v.editionSize} />
+                      )}
                     </span>
                   </li>
                 ))}

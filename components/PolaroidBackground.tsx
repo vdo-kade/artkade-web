@@ -30,6 +30,25 @@ const IMAGES_PER_SLOT = 3;
 const CYCLE_MS = 5000;
 const TRANSITION_MS = 2200;
 
+// Only the crossfade's current image needs to load immediately -- the other
+// IMAGES_PER_SLOT-1 aren't shown until the first cycle fires (at minimum
+// startDelayMs + CYCLE_MS, i.e. several seconds away), so mounting them
+// upfront was tripling this page's initial image requests (21 instead of 7
+// across the 7 slots) for zero visible benefit. Deferring their mount by
+// this long comfortably beats the earliest cycle deadline while letting
+// the 7 actually-visible images load without competing for bandwidth.
+const DEFER_REST_MS = 1500;
+
+// Feeds next/image's srcset selection with each slot's real rendered
+// width (96px-144px) instead of one flat guess -- most slots are well
+// under 150px, so a per-slot value lets next/image drop to a smaller
+// generated size for those instead of over-serving every slot at the
+// widest one's resolution.
+function slotSizes(width: string): string {
+  const rem = parseFloat(width);
+  return `${Math.ceil(rem * 16)}px`;
+}
+
 // Decorative, aria-hidden, pointer-events-none scatter of real catalogue
 // images behind the gate form. Each slot's position/rotation/size is a
 // fixed hand-picked value (not randomly generated at render time) so
@@ -62,6 +81,15 @@ function PolaroidSlot({
   startDelayMs: number;
 }) {
   const [index, setIndex] = useState(0);
+  // Starts at 1 (just the current image) -- the rest mount after
+  // DEFER_REST_MS, see that constant's comment above.
+  const [mountedCount, setMountedCount] = useState(1);
+
+  useEffect(() => {
+    if (images.length < 2) return;
+    const timeout = setTimeout(() => setMountedCount(images.length), DEFER_REST_MS);
+    return () => clearTimeout(timeout);
+  }, [images.length]);
 
   useEffect(() => {
     if (images.length < 2) return;
@@ -95,13 +123,13 @@ function PolaroidSlot({
           listing a customer needs to evaluate, and a Polaroid photo being
           a fixed-ratio crop is the actual reference aesthetic here. */}
       <div className="relative w-full" style={{ aspectRatio: "1 / 1" }}>
-        {images.map((img, i) => (
+        {images.slice(0, mountedCount).map((img, i) => (
           <Image
             key={img.src}
             src={img.src}
             alt=""
             fill
-            sizes="150px"
+            sizes={slotSizes(slot.width)}
             className="object-cover ease-in-out"
             style={{
               opacity: i === index ? 1 : 0,

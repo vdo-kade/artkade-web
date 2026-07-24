@@ -83,6 +83,8 @@ export default async function LandingPage() {
     id: p.id,
     imageUrl: p.imageUrl ?? "",
     label: p.name,
+    stallSlug: p.stallSlug,
+    slug: p.slug,
   }));
 
   return (

@@ -33,6 +33,7 @@ export default function AddToBagButton({
       variantLabel: selected.label,
       unitPrice: selected.price,
       imageUrl,
+      availableStock: selected.stock,
     });
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);

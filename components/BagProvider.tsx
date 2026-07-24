@@ -10,6 +10,13 @@ export type BagItem = {
   unitPrice: number;
   quantity: number;
   imageUrl?: string;
+  // Stock known at add-to-bag time -- lets the cart's quantity stepper cap
+  // itself without a network round-trip. Soft/advisory only: the real,
+  // authoritative check is still placeOrder's decrementStock at checkout,
+  // which re-reads stock fresh regardless of what this says. Undefined for
+  // bag items persisted before this field existed -- the stepper simply
+  // doesn't cap those, same as today's uncapped behavior.
+  availableStock?: number;
 };
 
 // Cart-line identity: each variant is its own line; re-adding the same
@@ -56,8 +63,14 @@ export function BagProvider({ children }: { children: ReactNode }) {
       const key = bagItemKey(item);
       const existing = prev.find((i) => bagItemKey(i) === key);
       if (existing) {
+        // Refresh availableStock from this call rather than keeping
+        // whatever was known at first add -- the customer is looking at
+        // the product page right now, so its figure is the freshest one
+        // available.
         return prev.map((i) =>
-          bagItemKey(i) === key ? { ...i, quantity: i.quantity + quantity } : i
+          bagItemKey(i) === key
+            ? { ...i, availableStock: item.availableStock, quantity: i.quantity + quantity }
+            : i
         );
       }
       return [...prev, { ...item, quantity }];

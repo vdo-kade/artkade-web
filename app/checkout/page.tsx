@@ -84,7 +84,7 @@ function BankTransferDetails() {
 }
 
 export default function CheckoutPage() {
-  const { items, totalAmount, clear, removeItem } = useBag();
+  const { items, totalAmount, clear, removeItem, updateQuantity } = useBag();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -242,32 +242,55 @@ export default function CheckoutPage() {
             <div>
               <h2 className="font-display text-2xl mb-4">Your bag</h2>
               <ul className="divide-y divide-line border border-line">
-                {items.map((item) => (
-                  <li
-                    key={bagItemKey(item)}
-                    className="flex items-center justify-between gap-3 p-3 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium">{item.productName}</p>
-                      <p className="text-warm-grey text-xs">
-                        {item.variantLabel} × {item.quantity}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="font-mono">
-                        Rs. {(item.unitPrice * item.quantity).toLocaleString("en-US")}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeItem(bagItemKey(item))}
-                        aria-label={`Remove ${item.productName} from bag`}
-                        className="text-warm-grey hover:text-red-600 transition-colors text-xs underline"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                {items.map((item) => {
+                  const atMax = item.availableStock != null && item.quantity >= item.availableStock;
+                  return (
+                    <li
+                      key={bagItemKey(item)}
+                      className="flex items-center justify-between gap-3 p-3 text-sm flex-wrap"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium">{item.productName}</p>
+                        <p className="text-warm-grey text-xs">{item.variantLabel}</p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center border border-line">
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(bagItemKey(item), item.quantity - 1)}
+                            disabled={item.quantity <= 1}
+                            aria-label={`Decrease quantity of ${item.productName}`}
+                            className="w-7 h-7 flex items-center justify-center hover:bg-paper disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          >
+                            −
+                          </button>
+                          <span className="w-7 text-center font-mono text-xs">{item.quantity}</span>
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(bagItemKey(item), item.quantity + 1)}
+                            disabled={atMax}
+                            title={atMax ? "No more in stock" : undefined}
+                            aria-label={`Increase quantity of ${item.productName}`}
+                            className="w-7 h-7 flex items-center justify-center hover:bg-paper disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <span className="font-mono">
+                          Rs. {(item.unitPrice * item.quantity).toLocaleString("en-US")}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeItem(bagItemKey(item))}
+                          aria-label={`Remove ${item.productName} from bag`}
+                          className="text-warm-grey hover:text-red-600 transition-colors text-xs underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
               <div className="flex items-center justify-between mt-4 font-medium">
                 <span>Total</span>

@@ -20,6 +20,7 @@ import DeleteFreebieButton from "./DeleteFreebieButton";
 import PasswordChangeForm from "./PasswordChangeForm";
 import NewProductToast from "./NewProductToast";
 import DashboardTabs from "./DashboardTabs";
+import ProductStockGrid, { type StockGridProduct } from "./ProductStockGrid";
 import AdminNav from "@/components/AdminNav";
 import { ActionForm } from "@/components/ActionForm";
 import StatusHistory, { type StatusHistoryEntry } from "@/components/StatusHistory";
@@ -163,6 +164,98 @@ function VendorDashboardError() {
     <div style={{ padding: 24, fontFamily: "sans-serif" }}>
       <p>Failed to load the dashboard. Check the server logs for details.</p>
     </div>
+  );
+}
+
+// The Stock tab's per-product edit form, unchanged from before the
+// thumbnail-grid rewrite -- ProductStockGrid just decides when it's shown
+// instead of it always being expanded inline.
+function ProductEditCard({ product }: { product: ProductRow }) {
+  return (
+    <>
+      <ActionForm action={updateProduct} successMessage="Product updated.">
+        <input type="hidden" name="productId" value={product.id} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <strong>{product.name}</strong>
+          <span style={{ fontSize: 12, color: "#666" }}>{product.sold_count} sold</span>
+        </div>
+
+        {product.image_url && (
+          <Image
+            src={product.image_url}
+            alt={product.name}
+            width={480}
+            height={480}
+            sizes="120px"
+            style={{ width: "auto", height: "auto", maxWidth: 120, maxHeight: 120, margin: "8px 0", border: "1px solid #ccc" }}
+          />
+        )}
+
+        <label style={{ fontSize: 12, color: "#666" }}>Name</label>
+        <input style={inputStyle} name="name" defaultValue={product.name} required />
+        <label style={{ fontSize: 12, color: "#666" }}>Description</label>
+        <textarea style={{ ...inputStyle, minHeight: 60 }} name="description" defaultValue={product.description ?? ""} />
+        <label style={{ fontSize: 12, color: "#666" }}>Category</label>
+        <select style={inputStyle} name="category" defaultValue={product.category} required>
+          {CATEGORY_ORDER.map((cat) => (
+            <option key={cat} value={cat}>
+              {CATEGORY_LABELS[cat]}
+            </option>
+          ))}
+        </select>
+        <label style={{ fontSize: 12, color: "#666" }}>Replace photo</label>
+        <input style={{ marginBottom: 12, fontSize: 12 }} type="file" name="photo" accept="image/*" />
+
+        <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
+          <input type="checkbox" name="isActive" defaultChecked={product.is_active} /> Active
+          (visible on the stall)
+        </label>
+        <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
+          <input type="checkbox" name="isOneOff" defaultChecked={product.is_one_off} /> One of one, only 1
+          unit exists ever
+        </label>
+        {product.is_one_off && (
+          <p style={{ fontSize: 12, color: "#999", marginBottom: 6 }}>
+            Stock is capped at 1 below and won't restock once sold.
+          </p>
+        )}
+
+        {product.product_variants.map((variant) => (
+          <div key={variant.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <input type="hidden" name="variantId" value={variant.id} />
+            <input
+              style={{ flex: "2 1 140px", minWidth: 0, padding: 4, fontSize: 13, boxSizing: "border-box" }}
+              name={`variantLabel-${variant.id}`}
+              defaultValue={variant.label}
+            />
+            <label style={{ fontSize: 12, color: "#666" }}>Price</label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              name={`variantPrice-${variant.id}`}
+              defaultValue={variant.price}
+              style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
+            />
+            <label style={{ fontSize: 12, color: "#666" }}>Stock</label>
+            <input
+              type="number"
+              min={0}
+              max={product.is_one_off ? 1 : undefined}
+              name={`variantStock-${variant.id}`}
+              defaultValue={product.is_one_off ? Math.min(variant.stock, 1) : variant.stock}
+              style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
+            />
+          </div>
+        ))}
+        <button type="submit" style={{ padding: "6px 14px", marginTop: 8 }}>
+          Save changes
+        </button>
+      </ActionForm>
+      <div style={{ marginTop: 8 }}>
+        <DeleteProductButton productId={product.id} productName={product.name} />
+      </div>
+    </>
   );
 }
 
@@ -576,96 +669,23 @@ export default async function VendorDashboardPage({
           </p>
         )}
         {(products ?? []).length === 0 && <p>No products for this stall yet.</p>}
-        {(products ?? []).map((product) => (
-          <div
-            key={product.id}
-            id={`product-${product.id}`}
-            style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}
-          >
-            <ActionForm action={updateProduct} successMessage="Product updated.">
-              <input type="hidden" name="productId" value={product.id} />
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <strong>{product.name}</strong>
-                <span style={{ fontSize: 12, color: "#666" }}>{product.sold_count} sold</span>
-              </div>
-
-              {product.image_url && (
-                <Image
-                  src={product.image_url}
-                  alt={product.name}
-                  width={480}
-                  height={480}
-                  sizes="120px"
-                  style={{ width: "auto", height: "auto", maxWidth: 120, maxHeight: 120, margin: "8px 0", border: "1px solid #ccc" }}
-                />
-              )}
-
-              <label style={{ fontSize: 12, color: "#666" }}>Name</label>
-              <input style={inputStyle} name="name" defaultValue={product.name} required />
-              <label style={{ fontSize: 12, color: "#666" }}>Description</label>
-              <textarea style={{ ...inputStyle, minHeight: 60 }} name="description" defaultValue={product.description ?? ""} />
-              <label style={{ fontSize: 12, color: "#666" }}>Category</label>
-              <select style={inputStyle} name="category" defaultValue={product.category} required>
-                {CATEGORY_ORDER.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {CATEGORY_LABELS[cat]}
-                  </option>
-                ))}
-              </select>
-              <label style={{ fontSize: 12, color: "#666" }}>Replace photo</label>
-              <input style={{ marginBottom: 12, fontSize: 12 }} type="file" name="photo" accept="image/*" />
-
-              <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
-                <input type="checkbox" name="isActive" defaultChecked={product.is_active} /> Active
-                (visible on the stall)
-              </label>
-              <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
-                <input type="checkbox" name="isOneOff" defaultChecked={product.is_one_off} /> One of one, only 1
-                unit exists ever
-              </label>
-              {product.is_one_off && (
-                <p style={{ fontSize: 12, color: "#999", marginBottom: 6 }}>
-                  Stock is capped at 1 below and won't restock once sold.
-                </p>
-              )}
-
-              {product.product_variants.map((variant) => (
-                <div key={variant.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                  <input type="hidden" name="variantId" value={variant.id} />
-                  <input
-                    style={{ flex: "2 1 140px", minWidth: 0, padding: 4, fontSize: 13, boxSizing: "border-box" }}
-                    name={`variantLabel-${variant.id}`}
-                    defaultValue={variant.label}
-                  />
-                  <label style={{ fontSize: 12, color: "#666" }}>Price</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    name={`variantPrice-${variant.id}`}
-                    defaultValue={variant.price}
-                    style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
-                  />
-                  <label style={{ fontSize: 12, color: "#666" }}>Stock</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={product.is_one_off ? 1 : undefined}
-                    name={`variantStock-${variant.id}`}
-                    defaultValue={product.is_one_off ? Math.min(variant.stock, 1) : variant.stock}
-                    style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
-                  />
-                </div>
-              ))}
-              <button type="submit" style={{ padding: "6px 14px", marginTop: 8 }}>
-                Save changes
-              </button>
-            </ActionForm>
-            <div style={{ marginTop: 8 }}>
-              <DeleteProductButton productId={product.id} productName={product.name} />
-            </div>
-          </div>
-        ))}
+        {(products ?? []).length > 0 && (
+          <ProductStockGrid
+            sections={CATEGORY_ORDER.map((cat) => ({
+              title: CATEGORY_LABELS[cat],
+              products: (products ?? [])
+                .filter((p) => p.category === cat)
+                .map((product): StockGridProduct => ({
+                  id: product.id,
+                  name: product.name,
+                  imageUrl: product.image_url,
+                  stockRemaining: product.product_variants.reduce((s, v) => s + v.stock, 0),
+                  isActive: product.is_active,
+                  editCard: <ProductEditCard product={product} />,
+                })),
+            })).filter((section) => section.products.length > 0)}
+          />
+        )}
       </section>
 
       {collaboratorStalls.map((stall) => (

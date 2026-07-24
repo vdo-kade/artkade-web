@@ -34,7 +34,7 @@ export default async function StallPage({ params }: { params: { slug: string } }
     title: CATEGORY_LABELS[category],
     products: artist.products
       .filter((p) => p.category === category)
-      .map(mapProduct) as Product[],
+      .map((p) => mapProduct(p, artist.slug)) as Product[],
   })).filter((section) => section.products.length > 0);
 
   return (

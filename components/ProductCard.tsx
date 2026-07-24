@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Countdown from "./Countdown";
 import AddToBagButton from "./AddToBagButton";
 import ExpandableImage from "./ExpandableImage";
@@ -12,6 +13,8 @@ export type ProductVariant = {
 export type Product = {
   id: string;
   artistId: string;
+  slug: string;
+  stallSlug: string;
   name: string;
   imageUrl?: string;
   priceLabel: string; // e.g. "from Rs. 1,000"
@@ -53,7 +56,16 @@ export default function ProductCard({ product }: { product: Product }) {
       />
 
       <div className="pt-3 px-1">
-        <p className="font-display text-base leading-tight">{product.name}</p>
+        {/* Opens as a layered overlay (intercepting route) when clicked from
+            here, but is still a real shareable URL -- see
+            app/stalls/[slug]/@modal and app/stalls/[slug]/products. */}
+        <Link
+          href={`/stalls/${product.stallSlug}/products/${product.slug}`}
+          scroll={false}
+          className="block font-display text-base leading-tight hover:text-accent transition-colors"
+        >
+          {product.name}
+        </Link>
         <div className="flex items-center justify-between mt-2 text-sm">
           <span className="font-mono">{product.priceLabel}</span>
           {soldOut ? (

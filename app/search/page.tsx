@@ -8,6 +8,8 @@ import { PRODUCT_SELECT, mapProduct, mapStall } from "@/lib/catalogue";
 
 export const revalidate = 0;
 
+type SearchProductRow = Parameters<typeof mapProduct>[0] & { artists: { slug: string } };
+
 // Simple substring match (ilike), not fuzzy -- same RLS-backed anon client
 // and active/published filtering every other public page uses (see
 // lib/catalogue.ts), just with a name filter added on top.
@@ -29,9 +31,12 @@ export default async function SearchPage({ searchParams }: { searchParams: { q?:
       // Inner-joined against artists.is_active for the same reason as the
       // landing page's featured feed: a product shouldn't surface here just
       // because its own is_active is still true if its stall is archived.
+      // slug rides along on the same embed -- mapProduct needs it per-row
+      // here since (unlike the stall page/homepage) this query spans every
+      // artist at once, not one known stall at a time.
       supabase
         .from("products")
-        .select(`${PRODUCT_SELECT}, artists!inner(is_active)`)
+        .select(`${PRODUCT_SELECT}, artists!inner(slug, is_active)`)
         .eq("is_active", true)
         .eq("artists.is_active", true)
         .ilike("name", `%${q}%`)
@@ -39,7 +44,7 @@ export default async function SearchPage({ searchParams }: { searchParams: { q?:
         .limit(24),
     ]);
     stalls = (artistRows ?? []).map(mapStall);
-    products = (productRows ?? []).map(mapProduct);
+    products = ((productRows as SearchProductRow[] | null) ?? []).map((p) => mapProduct(p, p.artists.slug));
   }
 
   const hasResults = stalls.length > 0 || products.length > 0;

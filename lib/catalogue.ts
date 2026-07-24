@@ -1,5 +1,6 @@
-import type { Product } from "@/components/ProductCard";
+import type { Product, ProductVariant } from "@/components/ProductCard";
 import type { Stall } from "@/components/StallCard";
+import { createClient } from "./supabase-server";
 
 type VariantRow = { id: string; label: string; price: number; stock: number };
 
@@ -7,6 +8,7 @@ type ProductRow = {
   id: string;
   artist_id: string;
   name: string;
+  slug: string;
   category: string;
   image_url: string | null;
   is_bestseller: boolean;
@@ -36,7 +38,7 @@ export type ArtistWithProducts = ArtistRow & {
 // Shared select fragment so the landing page's flat product list and the
 // stall page's nested `artists.products` query stay in sync.
 export const PRODUCT_SELECT =
-  "id, artist_id, name, category, image_url, is_bestseller, is_one_off, sold_count, sort_order, drop_ends_at, product_variants(id, label, price, stock)";
+  "id, artist_id, name, slug, category, image_url, is_bestseller, is_one_off, sold_count, sort_order, drop_ends_at, product_variants(id, label, price, stock)";
 
 export function formatPriceLabel(variants: VariantRow[]): string {
   if (variants.length === 0) return "";
@@ -65,10 +67,19 @@ export function formatSizeLabel(category: string, variants: VariantRow[]): strin
   return min === max ? min : `${min}–${max}`;
 }
 
-export function mapProduct(row: ProductRow): Product {
+// stallSlug is passed in explicitly rather than selected as a nested
+// `artists(slug)` on every ProductRow -- the stall page and homepage both
+// already know it per-query (they fetch one stall's products at a time),
+// and PostgREST rejects a second `artists(...)` embed on the same query
+// where one's already needed with `!inner` (search page's is_active
+// filter), so a single shared embed shape can't cleanly serve all three
+// call sites. Each caller supplies the slug it already has in scope.
+export function mapProduct(row: ProductRow, stallSlug: string): Product {
   return {
     id: row.id,
     artistId: row.artist_id,
+    slug: row.slug,
+    stallSlug,
     name: row.name,
     imageUrl: row.image_url ?? undefined,
     priceLabel: formatPriceLabel(row.product_variants),
@@ -110,3 +121,79 @@ export const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export const CATEGORY_ORDER = Object.keys(CATEGORY_LABELS);
+
+// ---------- PRODUCT DETAIL PAGE ----------
+
+export type ProductDetail = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  category: string;
+  isOneOff: boolean;
+  soldCount: number;
+  dropEndsAt?: string;
+  images: { src: string; alt: string }[];
+  variants: ProductVariant[];
+  stallName: string;
+  stallSlug: string;
+};
+
+type ProductDetailRow = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  category: string;
+  image_url: string | null;
+  is_one_off: boolean;
+  sold_count: number;
+  drop_ends_at: string | null;
+  product_variants: VariantRow[];
+  product_images: { url: string; sort_order: number }[];
+  artists: { slug: string; name: string; is_active: boolean } | null;
+};
+
+const PRODUCT_DETAIL_SELECT =
+  "id, name, slug, description, category, image_url, is_one_off, sold_count, drop_ends_at, product_variants(id, label, price, stock), product_images(url, sort_order), artists(slug, name, is_active)";
+
+// Shared by both the real product page (app/stalls/[slug]/products/
+// [productSlug]/page.tsx) and its intercepted-route modal counterpart --
+// slug is globally unique, but the URL's stallSlug is still checked
+// against the product's actual stall so a stale/wrong stall segment 404s
+// instead of silently rendering someone else's product under it.
+export async function getProductDetail(
+  stallSlug: string,
+  productSlug: string
+): Promise<ProductDetail | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("products")
+    .select(PRODUCT_DETAIL_SELECT)
+    .eq("slug", productSlug)
+    .eq("is_active", true)
+    .maybeSingle<ProductDetailRow>();
+
+  if (!data || !data.artists || !data.artists.is_active || data.artists.slug !== stallSlug) {
+    return null;
+  }
+
+  const gallery = [...data.product_images]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((img) => ({ src: img.url, alt: data.name }));
+
+  return {
+    id: data.id,
+    name: data.name,
+    slug: data.slug,
+    description: data.description,
+    category: data.category,
+    isOneOff: data.is_one_off,
+    soldCount: data.sold_count,
+    dropEndsAt: data.drop_ends_at ?? undefined,
+    images: gallery.length > 0 ? gallery : data.image_url ? [{ src: data.image_url, alt: data.name }] : [],
+    variants: data.product_variants,
+    stallName: data.artists.name,
+    stallSlug: data.artists.slug,
+  };
+}

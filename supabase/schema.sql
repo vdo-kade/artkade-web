@@ -58,6 +58,11 @@ create table products (
   artist_id uuid not null references artists(id) on delete cascade,
   category product_category not null,
   name text not null,
+  -- Slugified from name at creation (see app/vendor/actions.ts); globally
+  -- unique rather than scoped per-artist -- simpler lookup for the product
+  -- detail route (/stalls/[stallSlug]/products/[productSlug]) and no two
+  -- products in this catalogue have ever shared a name across artists.
+  slug text unique not null,
   description text,
   image_url text,
   is_bestseller boolean not null default false,
@@ -86,6 +91,20 @@ create table product_variants (
   -- one-time backfill and going forward whenever a vendor adds/edits a
   -- variant (see app/vendor/actions.ts).
   weight_grams int
+);
+
+-- Product detail page's image gallery. products.image_url (the card
+-- thumbnail) is left as its own column rather than folded into this table
+-- -- every existing product gets exactly one row here at sort_order 0
+-- (its current image_url, backfilled), and a product with no gallery rows
+-- at all still renders as a single-image gallery on the detail page by
+-- falling back to image_url. Multi-image upload is a separate task; this
+-- table just needs to exist so the detail page has somewhere to read from.
+create table product_images (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references products(id) on delete cascade,
+  url text not null,
+  sort_order int not null default 0
 );
 
 -- ---------- ORDERS ----------
@@ -233,6 +252,10 @@ create table magazine_posts (
 -- single hottest join in the app.
 create index if not exists idx_product_variants_product_id on product_variants(product_id);
 
+-- The product detail page nests product_images(...) under products and
+-- orders by sort_order, same access pattern as product_variants above.
+create index if not exists idx_product_images_product_id on product_images(product_id, sort_order);
+
 -- artist_id is filtered directly across the vendor/admin dashboards
 -- (product management, deletes, dashboard counts) and joined via
 -- artists.products(...) on every stall page; sort_order is the
@@ -311,6 +334,7 @@ create index if not exists idx_beta_signups_created_at on beta_signups(created_a
 alter table artists enable row level security;
 alter table products enable row level security;
 alter table product_variants enable row level security;
+alter table product_images enable row level security;
 alter table freebies enable row level security;
 alter table magazine_posts enable row level security;
 alter table orders enable row level security;
@@ -328,6 +352,13 @@ create policy "public can read active products" on products
 
 create policy "public can read active variants" on product_variants
   for select using (is_active);
+
+-- No is_active column on product_images either -- same reasoning as
+-- freebies below: the public product detail page always reaches this
+-- table through an already-active-filtered products query, so there's no
+-- path that exposes an inactive product's gallery on its own.
+create policy "public can read product images" on product_images
+  for select using (true);
 
 -- No is_active column on freebies (unlike products) -- every row is public
 -- by design. The public page still filters to active stalls' freebies at

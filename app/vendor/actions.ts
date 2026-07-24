@@ -7,6 +7,7 @@ import { createClient as createAuthClient } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import { CATEGORY_ORDER } from "@/lib/catalogue";
 import { defaultWeightGrams } from "@/lib/shipping";
+import { uniqueProductSlug } from "@/lib/slug";
 import { FREEBIE_CATEGORY_ORDER } from "@/lib/freebies";
 import { uploadStallPhotoFile, uploadValidatedFreebieFile, type PhotoField } from "@/lib/storage";
 import { validateUpload, type UploadValidationResult } from "@/lib/image-validation";
@@ -240,11 +241,14 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
     imageUrl = uploaded.url;
   }
 
+  const slug = await uniqueProductSlug(supabase, name.trim());
+
   const { data: product, error } = await supabase
     .from("products")
     .insert({
       artist_id: artistId,
       name: name.trim(),
+      slug,
       description: typeof description === "string" && description.trim() ? description.trim() : null,
       category,
       image_url: imageUrl,

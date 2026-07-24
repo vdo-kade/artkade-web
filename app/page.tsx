@@ -50,7 +50,8 @@ export default async function LandingPage() {
     .eq("is_active", true)
     .order("sort_order");
 
-  const STALLS: Stall[] = (artistRows ?? []).map(mapStall);
+  const activeArtists = artistRows ?? [];
+  const STALLS: Stall[] = activeArtists.map(mapStall);
 
   // One query per active stall (rather than one global query ordered by
   // sort_order) -- a global order-by-sort_order can't tell "this stall's
@@ -63,7 +64,7 @@ export default async function LandingPage() {
   // stall's products out, same guarantee the old artists!inner(is_active)
   // join gave.
   const perArtistResults = await Promise.all(
-    (artistRows ?? []).map((a) =>
+    activeArtists.map((a) =>
       supabase
         .from("products")
         .select(PRODUCT_SELECT)
@@ -73,7 +74,9 @@ export default async function LandingPage() {
         .limit(FEATURED_DROP_TOTAL)
     )
   );
-  const perArtistProducts = perArtistResults.map((r) => (r.data ?? []).map(mapProduct));
+  const perArtistProducts = perArtistResults.map((r, i) =>
+    (r.data ?? []).map((p) => mapProduct(p, activeArtists[i].slug))
+  );
   const FEATURED_PRODUCTS: Product[] = interleaveFairly(perArtistProducts, FEATURED_DROP_TOTAL);
 
   const WHEEL_IMAGES: WheelImage[] = FEATURED_PRODUCTS.map((p) => ({

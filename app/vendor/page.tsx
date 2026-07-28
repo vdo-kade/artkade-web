@@ -16,6 +16,7 @@ import {
 } from "@/lib/shipping";
 import { updateStallDetails, uploadStallPhoto, createProduct, updateProduct, createFreebie } from "./actions";
 import DeleteProductButton from "./DeleteProductButton";
+import ProductImageManager from "./ProductImageManager";
 import DeleteFreebieButton from "./DeleteFreebieButton";
 import PasswordChangeForm from "./PasswordChangeForm";
 import NewProductToast from "./NewProductToast";
@@ -43,6 +44,7 @@ type ArtistRow = {
 };
 
 type VariantRow = { id: string; label: string; price: number; stock: number };
+type ProductImageRow = { id: string; url: string; sort_order: number };
 type ProductRow = {
   id: string;
   category: string;
@@ -56,6 +58,7 @@ type ProductRow = {
   shared_stock_pool: boolean;
   is_exclusive_drop: boolean;
   product_variants: VariantRow[];
+  product_images: ProductImageRow[];
 };
 
 type CollaboratorProductRow = {
@@ -183,16 +186,12 @@ function ProductEditCard({ product }: { product: ProductRow }) {
           <span style={{ fontSize: 12, color: "#666" }}>{product.sold_count} sold</span>
         </div>
 
-        {product.image_url && (
-          <Image
-            src={product.image_url}
-            alt={product.name}
-            width={480}
-            height={480}
-            sizes="120px"
-            style={{ width: "auto", height: "auto", maxWidth: 120, maxHeight: 120, margin: "8px 0", border: "1px solid #ccc" }}
-          />
-        )}
+        <ProductImageManager
+          productId={product.id}
+          images={[...product.product_images]
+            .sort((a, b) => a.sort_order - b.sort_order)
+            .map((img) => ({ id: img.id, url: img.url }))}
+        />
 
         <label style={{ fontSize: 12, color: "#666" }}>Name</label>
         <input style={inputStyle} name="name" defaultValue={product.name} required />
@@ -206,8 +205,6 @@ function ProductEditCard({ product }: { product: ProductRow }) {
             </option>
           ))}
         </select>
-        <label style={{ fontSize: 12, color: "#666" }}>Replace photo</label>
-        <input style={{ marginBottom: 12, fontSize: 12 }} type="file" name="photo" accept="image/*" />
 
         {product.category === "tshirt" && (
           <div style={{ border: "1px solid #eee", borderRadius: 4, padding: 8, marginBottom: 12 }}>
@@ -378,7 +375,7 @@ export default async function VendorDashboardPage({
     supabase
       .from("products")
       .select(
-        "id, category, name, description, image_url, is_active, is_one_off, sold_count, sizing_chart_url, shared_stock_pool, is_exclusive_drop, product_variants(id, label, price, stock)"
+        "id, category, name, description, image_url, is_active, is_one_off, sold_count, sizing_chart_url, shared_stock_pool, is_exclusive_drop, product_variants(id, label, price, stock), product_images(id, url, sort_order)"
       )
       .eq("artist_id", selectedArtistId)
       .order("sort_order")

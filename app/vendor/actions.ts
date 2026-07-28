@@ -152,7 +152,10 @@ async function uploadProductPhoto(
   const validated = await validateUpload(file, "image");
   if (!validated.ok) return validated;
 
-  const path = `products/${artistSlug}/${Date.now()}.${validated.ext}`;
+  // Random suffix alongside the timestamp -- addProductImages can upload
+  // several files in the same request, fast enough to land on the same
+  // millisecond and collide on a Date.now()-only path.
+  const path = `products/${artistSlug}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${validated.ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from("media")
@@ -286,6 +289,14 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
     }))
   );
 
+  // Keeps the invariant the gallery manager (ProductImageManager) relies on
+  // -- products.image_url always mirrors product_images' first row. Only
+  // fires when a photo was actually uploaded above; an imageless product
+  // just starts with an empty gallery instead.
+  if (imageUrl) {
+    await supabase.from("product_images").insert({ product_id: product.id, url: imageUrl, sort_order: 0 });
+  }
+
   revalidatePath("/");
   // A redirect (rather than just revalidatePath) is what actually clears the
   // "Add a product" form -- it's a plain uncontrolled form with no client JS,
@@ -313,7 +324,6 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   const isActive = formData.get("isActive") === "on";
   const isOneOff = formData.get("isOneOff") === "on";
   const isExclusiveDrop = formData.get("isExclusiveDrop") === "on";
-  const file = formData.get("photo");
   const sizingChartFile = formData.get("sizingChartPhoto");
   const removeSizingChart = formData.get("removeSizingChart") === "on";
   if (typeof productId !== "string") return { ok: false, error: "Missing product." };
@@ -341,13 +351,6 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   }>();
   if (!existing || !existing.artists) return { ok: false, error: "Product not found." };
 
-  let imageUrl: string | undefined;
-  if (file instanceof File && file.size > 0) {
-    const uploaded = await uploadProductPhoto(supabase, existing.artists.slug, file);
-    if (!uploaded.ok) return { ok: false, error: uploaded.error };
-    imageUrl = uploaded.url;
-  }
-
   // Per-product sizing chart override (tshirt-only in the UI, but not
   // enforced here -- a new upload always wins over the "remove" checkbox,
   // and the checkbox only matters when nothing new was uploaded.
@@ -369,7 +372,6 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
       is_active: isActive,
       is_one_off: isOneOff,
       is_exclusive_drop: isExclusiveDrop,
-      ...(imageUrl ? { image_url: imageUrl } : {}),
       ...(sizingChartUrl !== undefined ? { sizing_chart_url: sizingChartUrl } : {}),
     })
     .eq("id", productId);
@@ -417,6 +419,199 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   );
   const variantError = variantResults.find((r) => r?.error)?.error;
   if (variantError) console.error("Failed to update a product variant:", variantError);
+
+  revalidatePath("/vendor");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+// Plenty for what any one product actually needs (a handful of angles/
+// colourways) while keeping a vendor from turning this into an unbounded
+// upload target -- same bounding instinct as MAX_VARIANT_ROWS above.
+const MAX_PRODUCT_IMAGES = 8;
+
+// One file per call, not a batch -- see MAX_UPLOAD_BYTES's own comment in
+// lib/image-validation.ts: Vercel's ~4.3MB hard request-body ceiling applies
+// to the whole request, not per file, so bundling several near-4MB photos
+// into one FormData/Server Action call would 413 before this code ever ran.
+// The gallery manager (ProductImageManager) calls this once per selected
+// file, sequentially, same as every other upload path in this app already
+// does for exactly this reason.
+export async function addProductImage(formData: FormData): Promise<ActionState> {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
+  const session = await getSessionRole();
+  if (!session) redirect("/admin/login");
+
+  const productId = formData.get("productId");
+  const file = formData.get("photo");
+  if (typeof productId !== "string") return { ok: false, error: "Missing product." };
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Choose a photo to upload." };
+
+  const supabase = createAdminClient();
+
+  // Ownership re-derived from the product's own artist_id, same pattern as
+  // updateProduct -- never trust a submitted productId alone for a vendor.
+  let ownerQuery = supabase
+    .from("products")
+    .select("id, image_url, artists(slug)")
+    .eq("id", productId);
+  if (session.role === "vendor") {
+    ownerQuery = ownerQuery.eq("artist_id", session.artistId);
+  }
+  const { data: existing } = await ownerQuery.maybeSingle<{
+    id: string;
+    image_url: string | null;
+    artists: { slug: string } | null;
+  }>();
+  if (!existing || !existing.artists) return { ok: false, error: "Product not found." };
+
+  const { data: currentImages } = await supabase
+    .from("product_images")
+    .select("sort_order")
+    .eq("product_id", productId)
+    .order("sort_order", { ascending: false });
+  if ((currentImages?.length ?? 0) >= MAX_PRODUCT_IMAGES) {
+    return { ok: false, error: `A product can have at most ${MAX_PRODUCT_IMAGES} photos.` };
+  }
+  const nextSortOrder = (currentImages?.[0]?.sort_order ?? -1) + 1;
+
+  const uploaded = await uploadProductPhoto(supabase, existing.artists.slug, file);
+  if (!uploaded.ok) return { ok: false, error: uploaded.error };
+
+  const { error: insertError } = await supabase
+    .from("product_images")
+    .insert({ product_id: productId, url: uploaded.url, sort_order: nextSortOrder });
+  if (insertError) {
+    console.error("Failed to save uploaded product image:", insertError);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
+
+  // First photo ever added becomes the card/hero image everywhere (see
+  // products.image_url's role in lib/catalogue.ts) -- only fires for a
+  // previously imageless product; every other product already has one.
+  if (!existing.image_url) {
+    await supabase.from("products").update({ image_url: uploaded.url }).eq("id", productId);
+  }
+
+  revalidatePath("/vendor");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+export async function deleteProductImage(formData: FormData): Promise<ActionState> {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
+  const session = await getSessionRole();
+  if (!session) redirect("/admin/login");
+
+  const productId = formData.get("productId");
+  const imageId = formData.get("imageId");
+  if (typeof productId !== "string" || typeof imageId !== "string") {
+    return { ok: false, error: "Missing product or photo." };
+  }
+
+  const supabase = createAdminClient();
+  let ownerQuery = supabase.from("products").select("id").eq("id", productId);
+  if (session.role === "vendor") {
+    ownerQuery = ownerQuery.eq("artist_id", session.artistId);
+  }
+  const { data: existing } = await ownerQuery.maybeSingle();
+  if (!existing) return { ok: false, error: "Product not found." };
+
+  const { data: images, error: imagesError } = await supabase
+    .from("product_images")
+    .select("id, url")
+    .eq("product_id", productId)
+    .order("sort_order", { ascending: true });
+  if (imagesError || !images) {
+    console.error("Failed to load product images:", imagesError);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
+  // A product always needs at least one photo for its card/hero image --
+  // rather than allow the gallery to go empty (and image_url to dangle at
+  // null), the vendor has to upload a replacement first.
+  if (images.length <= 1) {
+    return { ok: false, error: "A product needs at least one photo -- upload another before removing this one." };
+  }
+  if (!images.some((img) => img.id === imageId)) {
+    return { ok: false, error: "Photo not found." };
+  }
+
+  const { error: deleteError } = await supabase.from("product_images").delete().eq("id", imageId);
+  if (deleteError) {
+    console.error("Failed to delete product image:", deleteError);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
+
+  // Renumber so sort_order stays a clean, gapless 0..n-1 sequence, and sync
+  // the card/hero photo (products.image_url) to whatever's first now -- the
+  // just-deleted photo may have been it.
+  const remaining = images.filter((img) => img.id !== imageId);
+  await Promise.all(
+    remaining.map((img, index) => supabase.from("product_images").update({ sort_order: index }).eq("id", img.id))
+  );
+  await supabase.from("products").update({ image_url: remaining[0].url }).eq("id", productId);
+
+  revalidatePath("/vendor");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+export async function reorderProductImages(formData: FormData): Promise<ActionState> {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
+  const session = await getSessionRole();
+  if (!session) redirect("/admin/login");
+
+  const productId = formData.get("productId");
+  const imageIds = formData.getAll("imageId") as string[];
+  if (typeof productId !== "string" || imageIds.length === 0) {
+    return { ok: false, error: "Missing product or photo order." };
+  }
+
+  const supabase = createAdminClient();
+  let ownerQuery = supabase.from("products").select("id").eq("id", productId);
+  if (session.role === "vendor") {
+    ownerQuery = ownerQuery.eq("artist_id", session.artistId);
+  }
+  const { data: existing } = await ownerQuery.maybeSingle();
+  if (!existing) return { ok: false, error: "Product not found." };
+
+  const { data: images, error: imagesError } = await supabase
+    .from("product_images")
+    .select("id, url")
+    .eq("product_id", productId);
+  if (imagesError || !images) {
+    console.error("Failed to load product images:", imagesError);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
+
+  // Defensive: the submitted order must be exactly this product's current
+  // photo set, just reordered -- never trust it to silently add, drop, or
+  // reference a different product's rows.
+  const currentIds = new Set(images.map((img) => img.id));
+  const submittedIds = new Set(imageIds);
+  if (currentIds.size !== submittedIds.size || [...currentIds].some((id) => !submittedIds.has(id))) {
+    return { ok: false, error: "Photo list is out of date -- refresh and try again." };
+  }
+
+  const urlById = new Map(images.map((img) => [img.id, img.url]));
+  await Promise.all(
+    imageIds.map((id, index) => supabase.from("product_images").update({ sort_order: index }).eq("id", id))
+  );
+  // First in the new order becomes the card/hero photo everywhere -- see
+  // products.image_url's role in lib/catalogue.ts.
+  await supabase.from("products").update({ image_url: urlById.get(imageIds[0])! }).eq("id", productId);
 
   revalidatePath("/vendor");
   revalidatePath("/");

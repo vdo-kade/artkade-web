@@ -8,9 +8,9 @@ import { createClient } from "@/lib/supabase-server";
 import {
   ArtistWithProducts,
   CATEGORY_LABELS,
-  CATEGORY_ORDER,
   PRODUCT_SELECT,
   mapProduct,
+  resolveCategoryOrder,
 } from "@/lib/catalogue";
 
 export const revalidate = 0;
@@ -21,16 +21,17 @@ export default async function StallPage({ params }: { params: { slug: string } }
   const { data: artist } = await supabase
     .from("artists")
     .select(
-      `slug, name, tagline, bio, logo_url, hero_image_url, accent_color, is_popup, popup_ends_at, products(${PRODUCT_SELECT})`
+      `slug, name, tagline, bio, logo_url, hero_image_url, accent_color, is_popup, popup_ends_at, category_order, products(${PRODUCT_SELECT})`
     )
     .eq("slug", params.slug)
     .eq("is_active", true)
     .order("sort_order", { foreignTable: "products" })
-    .single<ArtistWithProducts>();
+    .single<ArtistWithProducts & { category_order: string[] | null }>();
 
   if (!artist) return notFound();
 
-  const sections = CATEGORY_ORDER.map((category) => ({
+  const presentCategories = Array.from(new Set(artist.products.map((p) => p.category)));
+  const sections = resolveCategoryOrder(artist.category_order, presentCategories).map((category) => ({
     title: CATEGORY_LABELS[category],
     products: artist.products
       .filter((p) => p.category === category)

@@ -12,7 +12,15 @@ import { FREEBIE_CATEGORY_ORDER } from "@/lib/freebies";
 import { uploadStallPhotoFile, uploadValidatedFreebieFile, type PhotoField } from "@/lib/storage";
 import { validateUpload, type UploadValidationResult } from "@/lib/image-validation";
 import { runPopupLifecycleTick } from "@/lib/popup-expiry";
+import { isValidHexColor, isAccentColorReadable, MIN_ACCENT_CONTRAST, CREAM_BACKGROUND } from "@/lib/color";
 import type { ActionState } from "@/lib/action-state";
+
+// Fixed number of label/url row pairs the stall-settings form renders for
+// artists.socials -- a plain bounded grid (same instinct as
+// MAX_VARIANT_ROWS below) rather than a dynamic add/remove widget, since a
+// stall only ever needs a handful of platform links. Blank rows are simply
+// skipped on save.
+const MAX_SOCIAL_LINKS = 6;
 
 // Every action here re-derives the caller's role/artist from their session
 // (never trusts a client-submitted artistId) and scopes the write to that
@@ -36,11 +44,45 @@ export async function updateStallDetails(formData: FormData): Promise<ActionStat
   const isPopup = formData.get("isPopup") === "on";
   const popupStartsAtRaw = formData.get("popupStartsAt");
   const popupEndsAtRaw = formData.get("popupEndsAt");
+  const accentColorRaw = formData.get("accentColor");
+  const showSocialsInFooter = formData.get("showSocialsInFooter") === "on";
   if (typeof artistId !== "string" || typeof name !== "string") {
     return { ok: false, error: "Missing required fields." };
   }
   if (session.role === "vendor" && artistId !== session.artistId) {
     return { ok: false, error: "You don't have permission to edit this stall." };
+  }
+
+  // <input type="color"> always submits a well-formed #rrggbb, but this is
+  // still a Server Action any request can call directly with an arbitrary
+  // body -- validate the shape for real rather than trusting the client.
+  let accentColor = "#C08A2E";
+  if (typeof accentColorRaw === "string" && accentColorRaw.trim()) {
+    if (!isValidHexColor(accentColorRaw)) {
+      return { ok: false, error: "Accent colour must be a valid hex colour (e.g. #C08A2E)." };
+    }
+    // Rejected outright, not just a soft warning -- the accent renders
+    // directly on the site's cream background (StallCard's swatch, the
+    // stall page's own tinted hero, every text-accent link/badge on that
+    // stall's pages), so a colour that fails contrast there would make the
+    // vendor's own stall harder to read for every visitor, not just an
+    // aesthetic nitpick.
+    if (!isAccentColorReadable(accentColorRaw)) {
+      return {
+        ok: false,
+        error: `That colour is too close to the page background to read clearly (needs at least ${MIN_ACCENT_CONTRAST}:1 contrast against ${CREAM_BACKGROUND}). Pick something darker or more saturated.`,
+      };
+    }
+    accentColor = accentColorRaw.trim();
+  }
+
+  const socials: { label: string; url: string }[] = [];
+  for (let i = 0; i < MAX_SOCIAL_LINKS; i++) {
+    const label = formData.get(`socialLabel-${i}`);
+    const url = formData.get(`socialUrl-${i}`);
+    if (typeof label === "string" && label.trim() && typeof url === "string" && url.trim()) {
+      socials.push({ label: label.trim(), url: url.trim() });
+    }
   }
 
   // <input type="datetime-local"> submits a local-time string with no
@@ -65,6 +107,9 @@ export async function updateStallDetails(formData: FormData): Promise<ActionStat
       is_popup: isPopup,
       popup_starts_at: popupStartsAt,
       popup_ends_at: popupEndsAt,
+      accent_color: accentColor,
+      socials,
+      show_socials_in_footer: showSocialsInFooter,
     })
     .eq("id", artistId);
   if (error) {
@@ -79,6 +124,44 @@ export async function updateStallDetails(formData: FormData): Promise<ActionStat
   // or archives a currently-active one whose end has passed -- it never
   // deactivates a live stall just because its start date moved.
   await runPopupLifecycleTick(supabase);
+
+  revalidatePath("/vendor");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+// Persists the vendor's category reorder bar (see CategoryOrderBar) --
+// saves exactly the set of categories currently shown there, in the new
+// order. lib/catalogue.ts's resolveCategoryOrder is what appends any
+// category this stall later adds that isn't in this saved array yet,
+// rather than it silently vanishing from the stall page.
+export async function updateCategoryOrder(formData: FormData): Promise<ActionState> {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
+  const session = await getSessionRole();
+  if (!session) redirect("/admin/login");
+
+  const artistId = formData.get("artistId");
+  const categories = formData.getAll("category") as string[];
+  if (typeof artistId !== "string" || categories.length === 0) {
+    return { ok: false, error: "Missing stall or category order." };
+  }
+  if (session.role === "vendor" && artistId !== session.artistId) {
+    return { ok: false, error: "You don't have permission to reorder this stall's categories." };
+  }
+  if (categories.some((cat) => !CATEGORY_ORDER.includes(cat))) {
+    return { ok: false, error: "Unrecognized category." };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("artists").update({ category_order: categories }).eq("id", artistId);
+  if (error) {
+    console.error("Failed to update category order:", error);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
 
   revalidatePath("/vendor");
   revalidatePath("/");
@@ -884,6 +967,61 @@ export async function reorderProductImages(formData: FormData): Promise<ActionSt
   return { ok: true };
 }
 
+// Reorders products within a single category section on the Stock tab's
+// grid (see app/vendor/ProductStockGrid.tsx) -- productIds is exactly one
+// category's products, in their new order. sort_order is a single column
+// shared across every category for this artist, but display always groups
+// by category first (see app/stalls/[slug]/page.tsx), so cross-category
+// relative order never matters -- reassigning this category's own existing
+// sort_order values (just permuted) is enough to reorder within it without
+// touching any other category's products at all.
+export async function reorderProducts(formData: FormData): Promise<ActionState> {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
+  const session = await getSessionRole();
+  if (!session) redirect("/admin/login");
+
+  const artistId = formData.get("artistId");
+  const productIds = formData.getAll("productId") as string[];
+  if (typeof artistId !== "string" || productIds.length === 0) {
+    return { ok: false, error: "Missing stall or product order." };
+  }
+  if (session.role === "vendor" && artistId !== session.artistId) {
+    return { ok: false, error: "You don't have permission to reorder this stall's products." };
+  }
+
+  const supabase = createAdminClient();
+  const { data: existing, error: fetchError } = await supabase
+    .from("products")
+    .select("id, sort_order")
+    .eq("artist_id", artistId)
+    .in("id", productIds);
+  if (fetchError || !existing) {
+    console.error("Failed to load products for reordering:", fetchError);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
+
+  // Defensive: the submitted order must be exactly this set of products,
+  // just reordered -- same guard pattern as reorderProductImages.
+  const currentIds = new Set(existing.map((p) => p.id));
+  const submittedIds = new Set(productIds);
+  if (currentIds.size !== submittedIds.size || [...currentIds].some((id) => !submittedIds.has(id))) {
+    return { ok: false, error: "Product list is out of date -- refresh and try again." };
+  }
+
+  const values = existing.map((p) => p.sort_order).sort((a, b) => a - b);
+  await Promise.all(
+    productIds.map((id, index) => supabase.from("products").update({ sort_order: values[index] }).eq("id", id))
+  );
+
+  revalidatePath("/vendor");
+  revalidatePath("/");
+  return { ok: true };
+}
+
 export async function deleteProduct(formData: FormData): Promise<ActionState> {
   // A falsy session here means the Supabase auth session has actually
   // died server-side (expired refresh token, rotation reuse, etc.) --
@@ -996,6 +1134,76 @@ export async function createFreebie(formData: FormData): Promise<ActionState> {
   });
   if (error) {
     console.error("Failed to create freebie:", error);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
+
+  revalidatePath("/vendor");
+  revalidatePath("/freebies");
+  return { ok: true };
+}
+
+export async function updateFreebie(formData: FormData): Promise<ActionState> {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
+  const session = await getSessionRole();
+  if (!session) redirect("/admin/login");
+
+  const freebieId = formData.get("freebieId");
+  const title = formData.get("title");
+  const description = formData.get("description");
+  const category = formData.get("category");
+  const file = formData.get("file");
+  const thumbnail = formData.get("thumbnail");
+  if (typeof freebieId !== "string") return { ok: false, error: "Missing freebie." };
+  if (typeof title !== "string" || !title.trim()) return { ok: false, error: "Title is required." };
+  if (typeof category !== "string" || !FREEBIE_CATEGORY_ORDER.includes(category)) {
+    return { ok: false, error: "Choose a valid category." };
+  }
+
+  const supabase = createAdminClient();
+  let ownerQuery = supabase.from("freebies").select("id, artists(slug)").eq("id", freebieId);
+  if (session.role === "vendor") {
+    ownerQuery = ownerQuery.eq("artist_id", session.artistId);
+  }
+  const { data: existing } = await ownerQuery.maybeSingle<{ id: string; artists: { slug: string } | null }>();
+  if (!existing || !existing.artists) return { ok: false, error: "Freebie not found." };
+
+  // Same validate-before-uploading-either order as createFreebie -- an
+  // invalid thumbnail shouldn't leave an already-uploaded replacement file
+  // orphaned with nothing pointing at it.
+  let fileUrl: string | undefined;
+  if (file instanceof File && file.size > 0) {
+    const validated = await validateUpload(file, "freebie");
+    if (!validated.ok) return { ok: false, error: validated.error };
+    const uploaded = await uploadValidatedFreebieFile(supabase, existing.artists.slug, "file", validated);
+    if (!uploaded.ok) return { ok: false, error: uploaded.error };
+    fileUrl = uploaded.url;
+  }
+
+  let thumbnailUrl: string | undefined;
+  if (thumbnail instanceof File && thumbnail.size > 0) {
+    const validated = await validateUpload(thumbnail, "image");
+    if (!validated.ok) return { ok: false, error: validated.error };
+    const uploaded = await uploadValidatedFreebieFile(supabase, existing.artists.slug, "thumbnail", validated);
+    if (!uploaded.ok) return { ok: false, error: uploaded.error };
+    thumbnailUrl = uploaded.url;
+  }
+
+  const { error } = await supabase
+    .from("freebies")
+    .update({
+      title: title.trim(),
+      description: typeof description === "string" && description.trim() ? description.trim() : null,
+      category,
+      ...(fileUrl ? { file_url: fileUrl } : {}),
+      ...(thumbnailUrl ? { thumbnail_url: thumbnailUrl } : {}),
+    })
+    .eq("id", freebieId);
+  if (error) {
+    console.error("Failed to update freebie:", error);
     return { ok: false, error: "Something went wrong. Check server logs." };
   }
 

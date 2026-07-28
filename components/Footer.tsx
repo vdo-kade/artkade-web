@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase";
 import { LOGO_URL, LOGO_SHADOW_FILTER } from "@/lib/brand";
+import { sortSocialsForDisplay } from "@/lib/socials";
 import SocialIcon from "./SocialIcon";
 
 type SocialLink = { label: string; url: string };
@@ -97,7 +98,7 @@ export default function Footer() {
                 <div key={artist.id}>
                   <p className="text-xs text-warm-grey mb-1.5">{artist.name}</p>
                   <div className="flex items-center gap-3">
-                    {artist.socials.map((social) => (
+                    {sortSocialsForDisplay(artist.socials).map((social) => (
                       <a
                         key={social.label}
                         href={social.url}

@@ -166,6 +166,38 @@ export const CATEGORY_LABELS: Record<string, string> = {
 
 export const CATEGORY_ORDER = Object.keys(CATEGORY_LABELS);
 
+// Default display order for a stall that's never touched its category
+// order setting (artists.category_order, null/empty) -- t-shirts, then
+// stickers, then prints lead, with the categories most stalls don't use
+// (digital/freebie/other) trailing in the same relative order they always
+// had. Deliberately a separate constant from CATEGORY_ORDER above, which
+// stays whatever order suits the "Category" dropdown in the product
+// create/edit forms -- that ordering was never a display concern and
+// doesn't need to change just because the default display order did.
+export const DEFAULT_CATEGORY_ORDER = ["tshirt", "sticker_pack", "print", "digital", "freebie", "other"];
+
+// A stall's saved category_order can predate a category it only just
+// started selling in (e.g. it was set before the vendor ever added a
+// t-shirt) -- resolving it here rather than trusting the saved array
+// verbatim is what keeps that new category from silently vanishing off the
+// stall page instead of just appending to the end.
+export function resolveCategoryOrder(
+  customOrder: string[] | null | undefined,
+  presentCategories: string[]
+): string[] {
+  const base = customOrder && customOrder.length > 0 ? customOrder : DEFAULT_CATEGORY_ORDER;
+  const known = base.filter((cat) => presentCategories.includes(cat));
+  const missing = presentCategories.filter((cat) => !base.includes(cat));
+  // Missing categories still get a deterministic relative order (by the
+  // site-wide default), not DB/insertion order, so which one appends first
+  // never depends on incidental row order.
+  const missingOrdered = [
+    ...DEFAULT_CATEGORY_ORDER.filter((cat) => missing.includes(cat)),
+    ...missing.filter((cat) => !DEFAULT_CATEGORY_ORDER.includes(cat)),
+  ];
+  return [...known, ...missingOrdered];
+}
+
 // ---------- PRODUCT DETAIL PAGE ----------
 
 export type ProductDetail = {

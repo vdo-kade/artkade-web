@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { getCachedUser } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import { logout } from "@/app/admin/actions";
-import { CATEGORY_LABELS, CATEGORY_ORDER, productStockTotal } from "@/lib/catalogue";
+import { CATEGORY_LABELS, CATEGORY_ORDER, productStockTotal, resolveCategoryOrder } from "@/lib/catalogue";
 import { FREEBIE_CATEGORY_LABELS, FREEBIE_CATEGORY_ORDER, FREEBIE_SELECT, type FreebieRow } from "@/lib/freebies";
 import { ORDER_STATUS_LABELS } from "@/lib/orders";
 import {
@@ -20,12 +20,16 @@ import {
   createProduct,
   updateProduct,
   duplicateProduct,
+  updateCategoryOrder,
   createFreebie,
+  updateFreebie,
 } from "./actions";
 import DeleteProductButton from "./DeleteProductButton";
 import ProductImageManager from "./ProductImageManager";
 import ProductVariantManager from "./ProductVariantManager";
+import CategoryOrderBar from "./CategoryOrderBar";
 import DeleteFreebieButton from "./DeleteFreebieButton";
+import FreebieEditToggle from "./FreebieEditToggle";
 import PasswordChangeForm from "./PasswordChangeForm";
 import NewProductToast from "./NewProductToast";
 import DashboardTabs from "./DashboardTabs";
@@ -38,6 +42,7 @@ import { approveOrder, rejectOrder } from "@/app/admin/orders/actions";
 
 export const revalidate = 0;
 
+type SocialLink = { label: string; url: string };
 type ArtistRow = {
   id: string;
   slug: string;
@@ -49,6 +54,10 @@ type ArtistRow = {
   is_popup: boolean;
   popup_starts_at: string | null;
   popup_ends_at: string | null;
+  accent_color: string | null;
+  socials: SocialLink[] | null;
+  show_socials_in_footer: boolean;
+  category_order: string[] | null;
 };
 
 type VariantRow = { id: string; label: string; price: number; stock: number; edition_size: number | null };
@@ -399,7 +408,9 @@ export default async function VendorDashboardPage({
   const [artistResult, productsResult, freebiesResult] = await Promise.all([
     supabase
       .from("artists")
-      .select("id, slug, name, tagline, bio, logo_url, hero_image_url, is_popup, popup_starts_at, popup_ends_at")
+      .select(
+        "id, slug, name, tagline, bio, logo_url, hero_image_url, is_popup, popup_starts_at, popup_ends_at, accent_color, socials, show_socials_in_footer, category_order"
+      )
       .eq("id", selectedArtistId)
       .maybeSingle<ArtistRow>(),
     supabase
@@ -609,6 +620,15 @@ export default async function VendorDashboardPage({
     return <div style={{ padding: 24, fontFamily: "sans-serif" }}>Stall not found.</div>;
   }
 
+  // Drives both the Stock tab's section order and its reorder-chips bar --
+  // resolveCategoryOrder appends any category this stall has products in
+  // but hasn't yet arranged (a brand new category_order, or one saved
+  // before this category existed) rather than dropping it.
+  const presentCategoryOrder = resolveCategoryOrder(
+    artist.category_order,
+    Array.from(new Set((products ?? []).map((p) => p.category)))
+  );
+
   return (
     <>
       <AdminNav role={session.role} />
@@ -684,7 +704,52 @@ export default async function VendorDashboardPage({
             name="popupEndsAt"
             defaultValue={toDatetimeLocal(artist.popup_ends_at)}
           />
-          <button type="submit" style={{ padding: "6px 14px" }}>
+
+          <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>Accent colour</label>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <input
+              type="color"
+              name="accentColor"
+              defaultValue={artist.accent_color ?? "#C08A2E"}
+              style={{ width: 48, height: 32, padding: 0, border: "1px solid #ccc" }}
+            />
+            <span style={{ fontSize: 12, color: "#666" }}>
+              Shown on your stall card and page -- must contrast enough against the site's cream
+              background to stay readable, or saving will be rejected.
+            </span>
+          </div>
+
+          <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
+            <input type="checkbox" name="showSocialsInFooter" defaultChecked={artist.show_socials_in_footer} />{" "}
+            Show my social links in the sitewide footer
+          </label>
+          <p style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>
+            Social links (label + URL, e.g. "Instagram" / "https://instagram.com/..."). Shown in a
+            fixed platform order in the footer regardless of the order typed here.
+          </p>
+          {/* Fixed row count -- mirrors MAX_SOCIAL_LINKS in ./actions.ts.
+              Blank rows are simply skipped on save. */}
+          {Array.from({ length: 6 }).map((_, i) => {
+            const existing = artist.socials?.[i];
+            return (
+              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                <input
+                  name={`socialLabel-${i}`}
+                  placeholder="Label (e.g. Instagram)"
+                  defaultValue={existing?.label ?? ""}
+                  style={{ flex: "1 1 120px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }}
+                />
+                <input
+                  name={`socialUrl-${i}`}
+                  placeholder="https://..."
+                  defaultValue={existing?.url ?? ""}
+                  style={{ flex: "2 1 200px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }}
+                />
+              </div>
+            );
+          })}
+
+          <button type="submit" style={{ padding: "6px 14px", marginTop: 8 }}>
             Save details
           </button>
         </ActionForm>
@@ -762,21 +827,31 @@ export default async function VendorDashboardPage({
         )}
         {(products ?? []).length === 0 && <p>No products for this stall yet.</p>}
         {(products ?? []).length > 0 && (
-          <ProductStockGrid
-            sections={CATEGORY_ORDER.map((cat) => ({
-              title: CATEGORY_LABELS[cat],
-              products: (products ?? [])
-                .filter((p) => p.category === cat)
-                .map((product): StockGridProduct => ({
-                  id: product.id,
-                  name: product.name,
-                  imageUrl: product.image_url,
-                  stockRemaining: productStockTotal(product.shared_stock_pool, product.product_variants),
-                  isActive: product.is_active,
-                  editCard: <ProductEditCard product={product} />,
-                })),
-            })).filter((section) => section.products.length > 0)}
-          />
+          <>
+            <CategoryOrderBar
+              artistId={artist.id}
+              categories={presentCategoryOrder.map((cat) => ({ key: cat, label: CATEGORY_LABELS[cat] }))}
+            />
+            <ProductStockGrid
+              artistId={artist.id}
+              sections={presentCategoryOrder
+                .map((cat) => ({
+                  title: CATEGORY_LABELS[cat],
+                  category: cat,
+                  products: (products ?? [])
+                    .filter((p) => p.category === cat)
+                    .map((product): StockGridProduct => ({
+                      id: product.id,
+                      name: product.name,
+                      imageUrl: product.image_url,
+                      stockRemaining: productStockTotal(product.shared_stock_pool, product.product_variants),
+                      isActive: product.is_active,
+                      editCard: <ProductEditCard product={product} />,
+                    })),
+                }))
+                .filter((section) => section.products.length > 0)}
+            />
+          </>
         )}
       </section>
 
@@ -860,7 +935,10 @@ export default async function VendorDashboardPage({
                       View file &rarr;
                     </a>
                   </p>
-                  <div style={{ marginTop: 8 }}>
+                  <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <FreebieEditToggle
+                      freebie={{ id: f.id, title: f.title, description: f.description, category: f.category }}
+                    />
                     <DeleteFreebieButton freebieId={f.id} freebieTitle={f.title} />
                   </div>
                 </div>

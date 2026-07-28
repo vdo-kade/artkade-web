@@ -34,6 +34,15 @@ create table artists (
   -- vendor's links are also data, not a code change.
   show_socials_in_footer boolean not null default false,
   socials jsonb not null default '[]'::jsonb,
+  -- Vendor-controlled display order for this stall's product category
+  -- sections (see the Stock tab's CategoryOrderBar). Null/empty means "use
+  -- the site default" (lib/catalogue.ts's DEFAULT_CATEGORY_ORDER) --
+  -- resolveCategoryOrder is what appends a category this stall has
+  -- products in but hasn't arranged yet (a brand new stall, or one that
+  -- added its first product in a category after last touching this
+  -- setting), rather than that category silently vanishing off the stall
+  -- page.
+  category_order text[],
   created_at timestamptz not null default now()
 );
 

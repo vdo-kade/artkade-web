@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
+import Link from "next/link";
 
 export type ExpandableImageItem = { src: string; alt: string };
 
@@ -35,12 +36,20 @@ export default function ExpandableImage({
   frameClassName,
   placeholder,
   sizes = "(min-width: 1024px) 260px, (min-width: 640px) 45vw, 90vw",
+  linkHref,
+  linkScroll = true,
 }: {
   images: ExpandableImageItem[];
   className?: string;
   frameClassName?: string;
   placeholder?: ReactNode;
   sizes?: string;
+  // When set, the thumbnail navigates here instead of opening the lightbox
+  // -- stall/listing-page cards (ProductCard) link straight to the product
+  // detail page; the lightbox itself only ever lives on that detail page
+  // (see ProductDetail.tsx, which never passes this).
+  linkHref?: string;
+  linkScroll?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
@@ -93,29 +102,48 @@ export default function ExpandableImage({
   return (
     <>
       <div className={`relative w-full ${frameClassName ?? ""}`}>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label={`View ${images[index].alt} full size`}
-          className="block w-full text-left cursor-zoom-in"
-        >
-          <Image
-            src={images[index].src}
-            alt={images[index].alt}
-            width={1200}
-            height={1500}
-            sizes={sizes}
-            className={`block w-full h-auto ${className ?? ""}`}
-          />
-        </button>
+        {linkHref ? (
+          <Link
+            href={linkHref}
+            scroll={linkScroll}
+            aria-label={`View ${images[index].alt}`}
+            className="block w-full text-left"
+          >
+            <Image
+              src={images[index].src}
+              alt={images[index].alt}
+              width={1200}
+              height={1500}
+              sizes={sizes}
+              className={`block w-full h-auto ${className ?? ""}`}
+            />
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label={`View ${images[index].alt} full size`}
+            className="block w-full text-left cursor-zoom-in"
+          >
+            <Image
+              src={images[index].src}
+              alt={images[index].alt}
+              width={1200}
+              height={1500}
+              sizes={sizes}
+              className={`block w-full h-auto ${className ?? ""}`}
+            />
+          </button>
+        )}
 
         {/* Corner thumbnail strip -- Amazon/Daraz-style gallery indicator so
             a multi-photo product/post is visibly a gallery before anyone
             opens the lightbox, and lets them jump straight to an image
             without it. Only worth showing once there's an actual choice to
             make; single-image callers (every ProductCard/MagazineCard today)
-            never hit this branch. */}
-        {images.length > 1 && (
+            never hit this branch. Never relevant in linkHref mode either --
+            that mode has no lightbox to jump within. */}
+        {!linkHref && images.length > 1 && (
           <div className="absolute bottom-2 right-2 flex gap-1 bg-white/90 p-1">
             {images.map((img, i) => (
               <button
@@ -139,7 +167,8 @@ export default function ExpandableImage({
         )}
       </div>
 
-      {open &&
+      {!linkHref &&
+        open &&
         createPortal(
           // Rendered into document.body rather than in place: an ancestor
           // card has a CSS transform (the polaroid tilt), and any

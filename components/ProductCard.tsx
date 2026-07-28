@@ -87,11 +87,17 @@ export default function ProductCard({ product }: { product: Product }) {
       )}
 
       {/* the "polaroid" frame: white border, image at its own natural
-          aspect ratio (never cropped), caption strip underneath */}
+          aspect ratio (never cropped), caption strip underneath. Links
+          straight to the product page (same target + scroll behavior as
+          the name link below) rather than opening the lightbox -- that's
+          reserved for the detail page itself (see ExpandableImage's
+          linkHref). */}
       <ExpandableImage
         images={product.imageUrl ? [{ src: product.imageUrl, alt: product.name }] : []}
         frameClassName="bg-paper min-h-[8rem] flex items-center justify-center overflow-hidden"
         placeholder={<span className="text-warm-grey text-xs font-mono">photo coming soon</span>}
+        linkHref={`/stalls/${product.stallSlug}/products/${product.slug}`}
+        linkScroll={false}
       />
 
       <div className="pt-3 px-1">

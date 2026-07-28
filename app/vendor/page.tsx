@@ -14,9 +14,17 @@ import {
   formatShipDate,
   type ShippingMethod,
 } from "@/lib/shipping";
-import { updateStallDetails, uploadStallPhoto, createProduct, updateProduct, createFreebie } from "./actions";
+import {
+  updateStallDetails,
+  uploadStallPhoto,
+  createProduct,
+  updateProduct,
+  duplicateProduct,
+  createFreebie,
+} from "./actions";
 import DeleteProductButton from "./DeleteProductButton";
 import ProductImageManager from "./ProductImageManager";
+import ProductVariantManager from "./ProductVariantManager";
 import DeleteFreebieButton from "./DeleteFreebieButton";
 import PasswordChangeForm from "./PasswordChangeForm";
 import NewProductToast from "./NewProductToast";
@@ -43,7 +51,7 @@ type ArtistRow = {
   popup_ends_at: string | null;
 };
 
-type VariantRow = { id: string; label: string; price: number; stock: number };
+type VariantRow = { id: string; label: string; price: number; stock: number; edition_size: number | null };
 type ProductImageRow = { id: string; url: string; sort_order: number };
 type ProductRow = {
   id: string;
@@ -53,6 +61,8 @@ type ProductRow = {
   image_url: string | null;
   is_active: boolean;
   is_one_off: boolean;
+  is_bestseller: boolean;
+  drop_ends_at: string | null;
   sold_count: number;
   sizing_chart_url: string | null;
   shared_stock_pool: boolean;
@@ -247,6 +257,10 @@ function ProductEditCard({ product }: { product: ProductRow }) {
           (visible on the stall)
         </label>
         <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
+          <input type="checkbox" name="isBestseller" defaultChecked={product.is_bestseller} /> Bestseller
+          (shows a ribbon on the card)
+        </label>
+        <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
           <input type="checkbox" name="isOneOff" defaultChecked={product.is_one_off} /> One of one, only 1
           unit exists ever
         </label>
@@ -263,6 +277,16 @@ function ProductEditCard({ product }: { product: ProductRow }) {
           drop (shows collective stock on the product card)
         </label>
 
+        <label style={{ fontSize: 12, color: "#666" }}>
+          Drop countdown ends at (shown as a timer on the card/detail page; leave blank for none)
+        </label>
+        <input
+          style={inputStyle}
+          type="datetime-local"
+          name="dropEndsAt"
+          defaultValue={toDatetimeLocal(product.drop_ends_at)}
+        />
+
         {product.shared_stock_pool && (
           <div style={{ border: "1px solid #eee", borderRadius: 4, padding: 8, marginBottom: 8 }}>
             <label style={{ fontSize: 12, color: "#666" }}>
@@ -275,47 +299,53 @@ function ProductEditCard({ product }: { product: ProductRow }) {
               defaultValue={product.product_variants[0]?.stock ?? 0}
               style={{ width: 100, padding: 4, boxSizing: "border-box", display: "block", marginTop: 4 }}
             />
-          </div>
-        )}
-
-        {product.product_variants.map((variant) => (
-          <div key={variant.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <input type="hidden" name="variantId" value={variant.id} />
-            <input
-              style={{ flex: "2 1 140px", minWidth: 0, padding: 4, fontSize: 13, boxSizing: "border-box" }}
-              name={`variantLabel-${variant.id}`}
-              defaultValue={variant.label}
-            />
-            <label style={{ fontSize: 12, color: "#666" }}>Price</label>
+            <label style={{ fontSize: 12, color: "#666", display: "block", marginTop: 8 }}>
+              Shared edition size (one countdown for the whole pool; leave blank for none)
+            </label>
             <input
               type="number"
               min={0}
-              step="0.01"
-              name={`variantPrice-${variant.id}`}
-              defaultValue={variant.price}
-              style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
+              name="sharedEditionSize"
+              defaultValue={product.product_variants[0]?.edition_size ?? ""}
+              placeholder="none"
+              style={{ width: 100, padding: 4, boxSizing: "border-box", display: "block", marginTop: 4 }}
             />
-            {!product.shared_stock_pool && (
-              <>
-                <label style={{ fontSize: 12, color: "#666" }}>Stock</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={product.is_one_off ? 1 : undefined}
-                  name={`variantStock-${variant.id}`}
-                  defaultValue={product.is_one_off ? Math.min(variant.stock, 1) : variant.stock}
-                  style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
-                />
-              </>
-            )}
           </div>
-        ))}
+        )}
+
+        <ProductVariantManager
+          productId={product.id}
+          sharedStockPool={product.shared_stock_pool}
+          isOneOff={product.is_one_off}
+          variants={product.product_variants.map((v) => ({
+            id: v.id,
+            label: v.label,
+            price: v.price,
+            stock: v.stock,
+            editionSize: v.edition_size,
+          }))}
+        />
+
         <button type="submit" style={{ padding: "6px 14px", marginTop: 8 }}>
           Save changes
         </button>
       </ActionForm>
-      <div style={{ marginTop: 8 }}>
+      <div style={{ marginTop: 8, display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
         <DeleteProductButton productId={product.id} productName={product.name} />
+        <ActionForm action={duplicateProduct}>
+          <input type="hidden" name="productId" value={product.id} />
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <input
+              name="name"
+              placeholder="New product name"
+              defaultValue={`${product.name} copy`}
+              style={{ padding: 6, fontSize: 13 }}
+            />
+            <button type="submit" style={{ padding: "6px 14px" }}>
+              Duplicate
+            </button>
+          </div>
+        </ActionForm>
       </div>
     </>
   );
@@ -375,7 +405,7 @@ export default async function VendorDashboardPage({
     supabase
       .from("products")
       .select(
-        "id, category, name, description, image_url, is_active, is_one_off, sold_count, sizing_chart_url, shared_stock_pool, is_exclusive_drop, product_variants(id, label, price, stock), product_images(id, url, sort_order)"
+        "id, category, name, description, image_url, is_active, is_one_off, is_bestseller, drop_ends_at, sold_count, sizing_chart_url, shared_stock_pool, is_exclusive_drop, product_variants(id, label, price, stock, edition_size), product_images(id, url, sort_order)"
       )
       .eq("artist_id", selectedArtistId)
       .order("sort_order")

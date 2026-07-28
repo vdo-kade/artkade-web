@@ -308,6 +308,23 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
   redirect(`/vendor?artist=${artist.slug}&created=${product.id}`);
 }
 
+// Bounds how many sizes/variants the edit form's "Add variant" can grow an
+// existing product to (separate from MAX_VARIANT_ROWS above, which only
+// bounds the fixed creation-time grid) -- generous enough for real growth
+// over a product's life (more print sizes, more colourways) while still
+// keeping this a bounded input rather than an unbounded one.
+const MAX_PRODUCT_VARIANTS = 10;
+
+// Nullable per-variant edition size: an empty/blank field means "not a
+// limited run" (null), same convention as the sizing-chart/stock fields
+// around it -- never trust the raw string as a number without this check,
+// Number("") is 0, not "unset".
+function parseEditionSize(raw: FormDataEntryValue | null): number | null {
+  if (typeof raw !== "string" || raw.trim() === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
+}
+
 export async function updateProduct(formData: FormData): Promise<ActionState> {
   // A falsy session here means the Supabase auth session has actually
   // died server-side (expired refresh token, rotation reuse, etc.) --
@@ -324,6 +341,8 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   const isActive = formData.get("isActive") === "on";
   const isOneOff = formData.get("isOneOff") === "on";
   const isExclusiveDrop = formData.get("isExclusiveDrop") === "on";
+  const isBestseller = formData.get("isBestseller") === "on";
+  const dropEndsAtRaw = formData.get("dropEndsAt");
   const sizingChartFile = formData.get("sizingChartPhoto");
   const removeSizingChart = formData.get("removeSizingChart") === "on";
   if (typeof productId !== "string") return { ok: false, error: "Missing product." };
@@ -363,6 +382,14 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
     sizingChartUrl = null;
   }
 
+  // <input type="datetime-local"> submits a local-time string with no
+  // timezone (e.g. "2026-08-01T14:30"); the Date constructor parses that as
+  // local time, same reasoning as updateStallDetails' popup dates above.
+  // Leaving the field blank is the only "clear it" affordance, same as that
+  // same popup form -- no separate checkbox needed.
+  const dropEndsAt =
+    typeof dropEndsAtRaw === "string" && dropEndsAtRaw ? new Date(dropEndsAtRaw).toISOString() : null;
+
   const { error } = await supabase
     .from("products")
     .update({
@@ -372,6 +399,8 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
       is_active: isActive,
       is_one_off: isOneOff,
       is_exclusive_drop: isExclusiveDrop,
+      is_bestseller: isBestseller,
+      drop_ends_at: dropEndsAt,
       ...(sizingChartUrl !== undefined ? { sizing_chart_url: sizingChartUrl } : {}),
     })
     .eq("id", productId);
@@ -383,17 +412,43 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   // Shared-pool products (see lib/stock.ts) submit one combined stock field
   // instead of a variantStock-<id> per row -- applying it to every sibling
   // here keeps them numerically identical, the invariant decrementStock/
-  // restoreStock rely on to move the whole pool together.
+  // restoreStock rely on to move the whole pool together. Same idea for
+  // edition_size: a shared pool has one countdown, not five independent
+  // ones, so it gets one combined field too (sharedEditionSize).
   const sharedStockValue = existing.shared_stock_pool
     ? Math.max(0, Math.floor(Number(formData.get("sharedStock")) || 0))
     : null;
+  const sharedEditionSize = existing.shared_stock_pool
+    ? parseEditionSize(formData.get("sharedEditionSize"))
+    : null;
 
-  const variantIds = formData.getAll("variantId") as string[];
+  // variantId rows the client already knows about (see ProductVariantManager)
+  // are either real DB rows to update, or client-only "new-*" placeholders
+  // for a size added via "Add variant" this same submit -- distinguished by
+  // checking against what's actually in the DB right now, not by trusting
+  // the id's shape.
+  const { data: currentVariants } = await supabase
+    .from("product_variants")
+    .select("id")
+    .eq("product_id", productId);
+  const currentIds = new Set((currentVariants ?? []).map((v) => v.id));
+
+  const submittedIds = formData.getAll("variantId") as string[];
+  const updateIds = submittedIds.filter((id) => currentIds.has(id));
+  const newIds = submittedIds.filter((id) => !currentIds.has(id));
+
+  if (currentIds.size + newIds.length > MAX_PRODUCT_VARIANTS) {
+    return { ok: false, error: `A product can have at most ${MAX_PRODUCT_VARIANTS} sizes.` };
+  }
+
   const variantResults = await Promise.all(
-    variantIds.map((variantId) => {
+    updateIds.map((variantId) => {
       const label = formData.get(`variantLabel-${variantId}`);
       const stock = sharedStockValue ?? Number(formData.get(`variantStock-${variantId}`));
       const price = Number(formData.get(`variantPrice-${variantId}`));
+      const editionSize = existing.shared_stock_pool
+        ? sharedEditionSize
+        : parseEditionSize(formData.get(`variantEditionSize-${variantId}`));
       if (typeof label !== "string" || !label.trim()) return null;
       if (!Number.isFinite(price) || price < 0) return null;
       if (!Number.isFinite(stock) || stock < 0) return null;
@@ -407,6 +462,7 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
           label: label.trim(),
           price,
           stock: clampedStock,
+          edition_size: editionSize,
           // Recomputed on every edit, not just at creation -- if the label
           // changes (e.g. relabelled from A5 to A4), weight should follow
           // it rather than go stale. There's no manual weight override UI,
@@ -420,9 +476,219 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   const variantError = variantResults.find((r) => r?.error)?.error;
   if (variantError) console.error("Failed to update a product variant:", variantError);
 
+  // Newly added rows (this same submit's "Add variant" clicks) -- inserted
+  // fresh rather than updated, same field rules as above.
+  const newRows = newIds
+    .map((tempId) => {
+      const label = formData.get(`variantLabel-${tempId}`);
+      const stock = sharedStockValue ?? Number(formData.get(`variantStock-${tempId}`));
+      const price = Number(formData.get(`variantPrice-${tempId}`));
+      const editionSize = existing.shared_stock_pool
+        ? sharedEditionSize
+        : parseEditionSize(formData.get(`variantEditionSize-${tempId}`));
+      if (typeof label !== "string" || !label.trim()) return null;
+      if (!Number.isFinite(price) || price < 0) return null;
+      if (!Number.isFinite(stock) || stock < 0) return null;
+      const clampedStock = isOneOff ? Math.min(Math.floor(stock), 1) : Math.floor(stock);
+      return {
+        product_id: productId,
+        label: label.trim(),
+        price,
+        stock: clampedStock,
+        edition_size: editionSize,
+        weight_grams: defaultWeightGrams(category, label.trim()),
+      };
+    })
+    .filter((v): v is NonNullable<typeof v> => v !== null);
+  if (newRows.length > 0) {
+    const { error: insertError } = await supabase.from("product_variants").insert(newRows);
+    if (insertError) console.error("Failed to add new product variant(s):", insertError);
+  }
+
   revalidatePath("/vendor");
   revalidatePath("/");
   return { ok: true };
+}
+
+export async function deleteProductVariant(formData: FormData): Promise<ActionState> {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
+  const session = await getSessionRole();
+  if (!session) redirect("/admin/login");
+
+  const productId = formData.get("productId");
+  const variantId = formData.get("variantId");
+  if (typeof productId !== "string" || typeof variantId !== "string") {
+    return { ok: false, error: "Missing product or size." };
+  }
+
+  const supabase = createAdminClient();
+  let ownerQuery = supabase.from("products").select("id").eq("id", productId);
+  if (session.role === "vendor") {
+    ownerQuery = ownerQuery.eq("artist_id", session.artistId);
+  }
+  const { data: existingProduct } = await ownerQuery.maybeSingle();
+  if (!existingProduct) return { ok: false, error: "Product not found." };
+
+  const { data: variants, error: variantsError } = await supabase
+    .from("product_variants")
+    .select("id")
+    .eq("product_id", productId);
+  if (variantsError || !variants) {
+    console.error("Failed to load product variants:", variantsError);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
+  // A product always needs at least one buyable size -- same reasoning as
+  // deleteProductImage's "needs at least one photo" guard.
+  if (variants.length <= 1) {
+    return { ok: false, error: "A product needs at least one size -- add another before removing this one." };
+  }
+  if (!variants.some((v) => v.id === variantId)) {
+    return { ok: false, error: "Size not found." };
+  }
+
+  // offline_sales.variant_id cascades on delete (see supabase/schema.sql) --
+  // unlike order_items below, Postgres won't stop this delete, it'll just
+  // silently erase that sales history along with the variant. Checked and
+  // blocked here explicitly, since there's no FK violation to catch after
+  // the fact the way there is for order_items.
+  const { data: offlineSale } = await supabase
+    .from("offline_sales")
+    .select("id")
+    .eq("variant_id", variantId)
+    .limit(1)
+    .maybeSingle();
+  if (offlineSale) {
+    return {
+      ok: false,
+      error: "This size has offline sales logged against it and can't be removed. Set its stock to 0 instead.",
+    };
+  }
+
+  // order_items.variant_id has no ON DELETE clause (default RESTRICT) -- a
+  // variant referenced by a real order fails right here at the DB level,
+  // same as deleteProduct's own order_items guard. Caught and surfaced as a
+  // clean message rather than a raw constraint-violation error.
+  const { error: deleteError } = await supabase
+    .from("product_variants")
+    .delete()
+    .eq("id", variantId)
+    .eq("product_id", productId);
+  if (deleteError) {
+    console.error("Failed to delete product variant:", deleteError);
+    return {
+      ok: false,
+      error: "This size has been ordered before and can't be removed. Set its stock to 0 instead.",
+    };
+  }
+
+  revalidatePath("/vendor");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+export async function duplicateProduct(formData: FormData): Promise<ActionState> {
+  // A falsy session here means the Supabase auth session has actually
+  // died server-side (expired refresh token, rotation reuse, etc.) --
+  // silently no-opping left the form looking "unresponsive" with zero
+  // feedback. Bouncing to login surfaces it and lets a fresh sign-in
+  // restore a working session immediately.
+  const session = await getSessionRole();
+  if (!session) redirect("/admin/login");
+
+  const productId = formData.get("productId");
+  const name = formData.get("name");
+  if (typeof productId !== "string") return { ok: false, error: "Missing product." };
+  if (typeof name !== "string" || !name.trim()) return { ok: false, error: "Name is required." };
+
+  const supabase = createAdminClient();
+  let ownerQuery = supabase
+    .from("products")
+    .select(
+      "id, artist_id, category, is_bestseller, is_one_off, is_exclusive_drop, shared_stock_pool, artists(slug), product_variants(label, price, edition_size)"
+    )
+    .eq("id", productId);
+  if (session.role === "vendor") {
+    ownerQuery = ownerQuery.eq("artist_id", session.artistId);
+  }
+  const { data: source } = await ownerQuery.maybeSingle<{
+    id: string;
+    artist_id: string;
+    category: string;
+    is_bestseller: boolean;
+    is_one_off: boolean;
+    is_exclusive_drop: boolean;
+    shared_stock_pool: boolean;
+    artists: { slug: string } | null;
+    product_variants: { label: string; price: number; edition_size: number | null }[];
+  }>();
+  if (!source || !source.artists) return { ok: false, error: "Product not found." };
+
+  // Same MAX(sort_order)+1 pattern as createProduct -- lands at the end of
+  // this stall's list, not wherever the source product happened to sit.
+  const { data: maxSortRow } = await supabase
+    .from("products")
+    .select("sort_order")
+    .eq("artist_id", source.artist_id)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextSortOrder = (maxSortRow?.sort_order ?? -1) + 1;
+
+  const slug = await uniqueProductSlug(supabase, name.trim());
+
+  const { data: created, error } = await supabase
+    .from("products")
+    .insert({
+      artist_id: source.artist_id,
+      name: name.trim(),
+      slug,
+      // Deliberately blank, not copied: a duplicate is a new listing for
+      // (usually) different artwork that happens to share the same size/
+      // price structure -- the description, photos, and drop countdown are
+      // all specific to the original and shouldn't silently carry over.
+      description: null,
+      category: source.category,
+      image_url: null,
+      is_bestseller: source.is_bestseller,
+      is_one_off: source.is_one_off,
+      is_exclusive_drop: source.is_exclusive_drop,
+      shared_stock_pool: source.shared_stock_pool,
+      sort_order: nextSortOrder,
+      // Starts hidden -- it has no photos yet (explicitly not copied) and
+      // no fresh stock count, so it isn't ready to sell until the vendor
+      // finishes editing it and flips "Active" back on.
+      is_active: false,
+    })
+    .select("id")
+    .single();
+  if (error || !created) {
+    console.error("Failed to duplicate product:", error);
+    return { ok: false, error: "Something went wrong. Check server logs." };
+  }
+
+  if (source.product_variants.length > 0) {
+    const { error: variantsError } = await supabase.from("product_variants").insert(
+      source.product_variants.map((v) => ({
+        product_id: created.id,
+        label: v.label,
+        price: v.price,
+        // Stock deliberately starts at 0, not copied -- nothing's actually
+        // been produced yet for this new listing.
+        stock: 0,
+        edition_size: v.edition_size,
+        weight_grams: defaultWeightGrams(source.category, v.label),
+      }))
+    );
+    if (variantsError) console.error("Failed to duplicate product variants:", variantsError);
+  }
+
+  revalidatePath("/");
+  // Same redirect-to-clear-and-confirm pattern as createProduct.
+  redirect(`/vendor?artist=${source.artists.slug}&created=${created.id}`);
 }
 
 // Plenty for what any one product actually needs (a handful of angles/

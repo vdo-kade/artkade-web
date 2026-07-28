@@ -7,7 +7,9 @@ import AdminNav from "@/components/AdminNav";
 import { ActionForm } from "@/components/ActionForm";
 import StatusHistory from "@/components/StatusHistory";
 import OrderFulfillmentActions from "@/components/OrderFulfillmentActions";
-import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/lib/orders";
+import OrderGrid, { type OrderGridItem } from "@/components/OrderGrid";
+import WeeklyOrders from "@/components/WeeklyOrders";
+import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, groupByWeek } from "@/lib/orders";
 import { approveOrder, rejectOrder, updateInternalNotes } from "./actions";
 import { logout } from "../actions";
 
@@ -155,6 +157,132 @@ function InternalNotes({ order }: { order: OrderRow }) {
   );
 }
 
+// Full detail for an order still awaiting review -- unchanged content
+// from before the grid rework, just now rendered inside OrderGrid's
+// expand panel instead of always being on-screen.
+function PendingOrderDetail({ order }: { order: OrderWithProof }) {
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+        <strong>{order.order_number}</strong>
+        <span>{new Date(order.created_at).toLocaleString()}</span>
+      </div>
+
+      <p>
+        <strong>{order.customer_name}</strong> — {order.customer_email} — {order.customer_phone}
+      </p>
+      <p>{order.shipping_address}</p>
+      {order.customer_notes && (
+        <p>
+          <em>Notes: {order.customer_notes}</em>
+        </p>
+      )}
+
+      <ItemsTable items={order.order_items} />
+
+      <p>
+        <strong>Total: Rs. {order.total_amount.toLocaleString("en-US")}</strong>
+      </p>
+
+      <div style={{ margin: "12px 0" }}>
+        <ProofPreview order={order} />
+      </div>
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <ActionForm action={approveOrder} successMessage="Approved.">
+          <input type="hidden" name="orderId" value={order.id} />
+          <button type="submit" style={{ background: "green", color: "white", padding: "6px 12px", border: "none" }}>
+            Approve
+          </button>
+        </ActionForm>
+        <ActionForm action={rejectOrder} successMessage="Rejected.">
+          <input type="hidden" name="orderId" value={order.id} />
+          <button type="submit" style={{ background: "#b00", color: "white", padding: "6px 12px", border: "none" }}>
+            Reject
+          </button>
+        </ActionForm>
+      </div>
+
+      <StatusHistory history={order.order_status_history} />
+      <InternalNotes order={order} />
+    </div>
+  );
+}
+
+// Full detail for an order past review -- same content as before, minus
+// the always-open border/margin styling OrderGrid's expand panel already
+// supplies.
+function ReviewedOrderDetail({ order }: { order: OrderWithProof }) {
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+        <strong>{order.order_number}</strong>
+        <span
+          style={{
+            color: ORDER_STATUS_COLORS[order.status] ?? "#666",
+            textTransform: "uppercase",
+            fontSize: 12,
+            fontWeight: "bold",
+          }}
+        >
+          {ORDER_STATUS_LABELS[order.status] ?? order.status}
+          {order.reviewed_at ? ` · ${new Date(order.reviewed_at).toLocaleString()}` : ""}
+        </span>
+      </div>
+      {order.reviewed_by && (
+        <p style={{ fontSize: 12, color: "#999", marginBottom: 8 }}>Reviewed by {order.reviewed_by}</p>
+      )}
+
+      <p>
+        <strong>{order.customer_name}</strong> — {order.customer_email}
+      </p>
+
+      <ItemsTable items={order.order_items} />
+
+      <p>
+        <strong>Total: Rs. {order.total_amount.toLocaleString("en-US")}</strong>
+      </p>
+
+      <div style={{ margin: "12px 0" }}>
+        <ProofPreview order={order} />
+      </div>
+
+      <OrderFulfillmentActions orderId={order.id} status={order.status} />
+      <StatusHistory history={order.order_status_history} />
+      <InternalNotes order={order} />
+    </div>
+  );
+}
+
+function summaryLine(order: OrderWithProof): string {
+  const count = order.order_items.length;
+  return `${count} item${count === 1 ? "" : "s"} · Rs. ${order.total_amount.toLocaleString("en-US")}`;
+}
+
+function toPendingGridItem(order: OrderWithProof): OrderGridItem {
+  return {
+    id: order.id,
+    orderNumber: order.order_number,
+    customerName: order.customer_name,
+    statusLabel: ORDER_STATUS_LABELS[order.status] ?? order.status,
+    statusColor: ORDER_STATUS_COLORS[order.status] ?? "#666",
+    summaryLine: summaryLine(order),
+    detailCard: <PendingOrderDetail order={order} />,
+  };
+}
+
+function toReviewedGridItem(order: OrderWithProof): OrderGridItem {
+  return {
+    id: order.id,
+    orderNumber: order.order_number,
+    customerName: order.customer_name,
+    statusLabel: ORDER_STATUS_LABELS[order.status] ?? order.status,
+    statusColor: ORDER_STATUS_COLORS[order.status] ?? "#666",
+    summaryLine: summaryLine(order),
+    detailCard: <ReviewedOrderDetail order={order} />,
+  };
+}
+
 export default async function AdminOrdersPage() {
   // Was missing entirely -- every other admin/vendor page re-derives the
   // caller's role and bounces a dead/wrong-role session to login rather
@@ -189,13 +317,17 @@ export default async function AdminOrdersPage() {
     // also carries the rest of the fulfillment lifecycle (shipped,
     // delivered, etc), so an approved/shipped order here still gets its
     // FulfillmentActions buttons; only a genuinely terminal status
-    // (rejected, delivered, cancelled, out_of_stock) is inert.
+    // (rejected, delivered, cancelled, out_of_stock) is inert. Bounded at
+    // 500 (same defensive cap as e.g. the vendor dashboard's offline-sales
+    // query) rather than the old hard "last 20" -- week grouping is what
+    // now keeps a long history browsable, so there's no reason to hide
+    // anything older than 20 orders behind no UI at all.
     supabase
       .from("orders")
       .select(ORDER_SELECT)
       .neq("status", "awaiting_review")
-      .order("reviewed_at", { ascending: false })
-      .limit(20)
+      .order("created_at", { ascending: false })
+      .limit(500)
       .returns<OrderRow[]>(),
   ]);
 
@@ -210,6 +342,15 @@ export default async function AdminOrdersPage() {
 
   const pending = await withSignedProofs(supabase, pendingResult.data ?? []);
   const reviewed = await withSignedProofs(supabase, reviewedResult.data ?? []);
+
+  const pendingWeeks = groupByWeek(pending, (o) => o.created_at).map((week) => ({
+    ...week,
+    orders: week.orders.map(toPendingGridItem),
+  }));
+  const reviewedWeeks = groupByWeek(reviewed, (o) => o.created_at).map((week) => ({
+    ...week,
+    orders: week.orders.map(toReviewedGridItem),
+  }));
 
   return (
     <>
@@ -230,121 +371,16 @@ export default async function AdminOrdersPage() {
         {pending.length} order{pending.length === 1 ? "" : "s"} pending.
       </p>
 
-      {pending.length === 0 && <p>Nothing to review.</p>}
-
-      {pending.map((order) => (
-        <div
-          key={order.id}
-          style={{ border: "1px solid #ccc", borderRadius: 6, padding: 16, marginBottom: 16 }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-            <strong>{order.order_number}</strong>
-            <span>{new Date(order.created_at).toLocaleString()}</span>
-          </div>
-
-          <p>
-            <strong>{order.customer_name}</strong> — {order.customer_email} —{" "}
-            {order.customer_phone}
-          </p>
-          <p>{order.shipping_address}</p>
-          {order.customer_notes && (
-            <p>
-              <em>Notes: {order.customer_notes}</em>
-            </p>
-          )}
-
-          <ItemsTable items={order.order_items} />
-
-          <p>
-            <strong>Total: Rs. {order.total_amount.toLocaleString("en-US")}</strong>
-          </p>
-
-          <div style={{ margin: "12px 0" }}>
-            <ProofPreview order={order} />
-          </div>
-
-          <div style={{ display: "flex", gap: 8 }}>
-            <ActionForm action={approveOrder} successMessage="Approved.">
-              <input type="hidden" name="orderId" value={order.id} />
-              <button
-                type="submit"
-                style={{ background: "green", color: "white", padding: "6px 12px", border: "none" }}
-              >
-                Approve
-              </button>
-            </ActionForm>
-            <ActionForm action={rejectOrder} successMessage="Rejected.">
-              <input type="hidden" name="orderId" value={order.id} />
-              <button
-                type="submit"
-                style={{ background: "#b00", color: "white", padding: "6px 12px", border: "none" }}
-              >
-                Reject
-              </button>
-            </ActionForm>
-          </div>
-
-          <StatusHistory history={order.order_status_history} />
-          <InternalNotes order={order} />
-        </div>
-      ))}
+      <WeeklyOrders sections={pendingWeeks} emptyMessage="Nothing to review." />
 
       <h2 style={{ fontSize: 20, marginTop: 40, marginBottom: 8 }}>Reviewed &amp; in progress</h2>
       <p style={{ color: "#666", marginBottom: 24 }}>
-        Last {reviewed.length} order{reviewed.length === 1 ? "" : "s"} past review, most recent
-        first. An approved or shipped order can still be moved forward below; rejected/delivered/
-        cancelled/out-of-stock orders are final.
+        Every order past review, grouped by week, most recent week first. An approved or shipped
+        order can still be moved forward from its card; rejected/delivered/cancelled/out-of-stock
+        orders are final.
       </p>
 
-      {reviewed.length === 0 && <p>Nothing reviewed yet.</p>}
-
-      {reviewed.map((order) => (
-        <div
-          key={order.id}
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: 6,
-            padding: 16,
-            marginBottom: 12,
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-            <strong>{order.order_number}</strong>
-            <span
-              style={{
-                color: ORDER_STATUS_COLORS[order.status] ?? "#666",
-                textTransform: "uppercase",
-                fontSize: 12,
-                fontWeight: "bold",
-              }}
-            >
-              {ORDER_STATUS_LABELS[order.status] ?? order.status}
-              {order.reviewed_at ? ` · ${new Date(order.reviewed_at).toLocaleString()}` : ""}
-            </span>
-          </div>
-          {order.reviewed_by && (
-            <p style={{ fontSize: 12, color: "#999", marginBottom: 8 }}>Reviewed by {order.reviewed_by}</p>
-          )}
-
-          <p>
-            <strong>{order.customer_name}</strong> — {order.customer_email}
-          </p>
-
-          <ItemsTable items={order.order_items} />
-
-          <p>
-            <strong>Total: Rs. {order.total_amount.toLocaleString("en-US")}</strong>
-          </p>
-
-          <div style={{ margin: "12px 0" }}>
-            <ProofPreview order={order} />
-          </div>
-
-          <OrderFulfillmentActions orderId={order.id} status={order.status} />
-          <StatusHistory history={order.order_status_history} />
-          <InternalNotes order={order} />
-        </div>
-      ))}
+      <WeeklyOrders sections={reviewedWeeks} emptyMessage="Nothing reviewed yet." />
       </div>
     </>
   );

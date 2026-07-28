@@ -7,7 +7,7 @@ import { getSessionRole } from "@/lib/session-role";
 import { logout } from "@/app/admin/actions";
 import { CATEGORY_LABELS, CATEGORY_ORDER, productStockTotal, resolveCategoryOrder } from "@/lib/catalogue";
 import { FREEBIE_CATEGORY_LABELS, FREEBIE_CATEGORY_ORDER, FREEBIE_SELECT, type FreebieRow } from "@/lib/freebies";
-import { ORDER_STATUS_LABELS } from "@/lib/orders";
+import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, groupByWeek } from "@/lib/orders";
 import {
   SHIPPING_METHOD_LABELS,
   registeredPostShipDate,
@@ -38,6 +38,8 @@ import AdminNav from "@/components/AdminNav";
 import { ActionForm } from "@/components/ActionForm";
 import StatusHistory, { type StatusHistoryEntry } from "@/components/StatusHistory";
 import OrderFulfillmentActions from "@/components/OrderFulfillmentActions";
+import type { OrderGridItem } from "@/components/OrderGrid";
+import WeeklyOrders from "@/components/WeeklyOrders";
 import { approveOrder, rejectOrder } from "@/app/admin/orders/actions";
 
 export const revalidate = 0;
@@ -442,10 +444,29 @@ export default async function VendorDashboardPage({
     return <VendorDashboardError />;
   }
 
+  // Collaborator target-stall ids (e.g. Nuwan -> Shilpa Kade) -- fetched up
+  // here, before the Tracker tab query below, so that query can be broadened
+  // to include orders for a stall this vendor collaborates on, not just
+  // their own. Reused again further down for the read-only collaborator
+  // product listing, so it's only ever fetched once per page load.
+  let collaboratorTargetIds: string[] = [];
+  if (session.role === "vendor") {
+    const { data: collabRows } = await supabase
+      .from("stall_collaborators")
+      .select("target_artist_id")
+      .eq("viewer_artist_id", session.artistId);
+    collaboratorTargetIds = (collabRows ?? []).map((r) => r.target_artist_id);
+  }
+
   // Tracker tab data: this stall's offline (Vendor Mode) sales log/analytics,
-  // and every online order that contains at least one of this stall's
-  // products (an order can span multiple stalls -- total_amount below is
-  // the whole order's total, not just this stall's share of it).
+  // and every online order that contains at least one product belonging to
+  // this stall OR a stall it collaborates on (an order can span multiple
+  // stalls -- total_amount below is the whole order's total, not just this
+  // stall's share of it). Broadening to collaboratorTargetIds is what lets
+  // Nuwan see and track Shilpa Kade's joint orders here -- isSingleStall
+  // below still only allows him to *act* on an order that's solely his own
+  // stall's products, exactly as before; this only changes which orders he
+  // sees, not what he's allowed to do with them.
   const [offlineSalesResult, orderItemsResult] = await Promise.all([
     supabase
       .from("offline_sales")
@@ -459,7 +480,7 @@ export default async function VendorDashboardPage({
       .select(
         "order_id, quantity, products!inner(name, artist_id), orders!inner(id, order_number, customer_name, customer_phone, shipping_address, status, total_amount, created_at, shipping_method)"
       )
-      .eq("products.artist_id", selectedArtistId)
+      .in("products.artist_id", [selectedArtistId, ...collaboratorTargetIds])
       .returns<TrackerOrderItemRow[]>(),
   ]);
 
@@ -544,6 +565,35 @@ export default async function VendorDashboardPage({
     (o) => o.status !== "awaiting_review" && !PROCESSED_STATUSES.has(o.status)
   );
 
+  // Same click-to-open grid + collapsible-week grouping as the God
+  // dashboard's order-review page (see components/OrderGrid.tsx,
+  // components/WeeklyOrders.tsx, and lib/orders.ts's groupByWeek) --
+  // TrackerOrderRow's content is unchanged, just rendered inside the
+  // expand panel instead of always being on-screen.
+  function toOrderGridItem(order: TrackerOrder): OrderGridItem {
+    return {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      statusLabel: ORDER_STATUS_LABELS[order.status] ?? order.status,
+      statusColor: ORDER_STATUS_COLORS[order.status] ?? "#666",
+      summaryLine: order.itemNames.join(", "),
+      detailCard: <TrackerOrderRow order={order} />,
+    };
+  }
+  const pendingWeeks = groupByWeek(pendingTrackerOrders, (o) => o.createdAt).map((week) => ({
+    ...week,
+    orders: week.orders.map(toOrderGridItem),
+  }));
+  const processedWeeks = groupByWeek(processedTrackerOrders, (o) => o.createdAt).map((week) => ({
+    ...week,
+    orders: week.orders.map(toOrderGridItem),
+  }));
+  const otherWeeks = groupByWeek(otherTrackerOrders, (o) => o.createdAt).map((week) => ({
+    ...week,
+    orders: week.orders.map(toOrderGridItem),
+  }));
+
   // Day-keeper: pending/approved orders (the ones still waiting to be
   // packed) grouped by shipping method so it's obvious at a glance what
   // needs to ship by when -- Registered Post batches on a fixed weekly
@@ -558,14 +608,12 @@ export default async function VendorDashboardPage({
   // Read-only visibility into a collab stall (e.g. Shilpa Kade has no login
   // of its own -- Nuwan sees it here instead of getting a second account).
   // Admin doesn't need this: they already see every stall via the stall
-  // switcher above and the God dashboard.
+  // switcher above and the God dashboard. targetIds was already fetched
+  // above (collaboratorTargetIds) to broaden the Tracker query -- reused
+  // here rather than querying stall_collaborators a second time.
   let collaboratorStalls: CollaboratorStall[] = [];
   if (session.role === "vendor") {
-    const { data: collabRows } = await supabase
-      .from("stall_collaborators")
-      .select("target_artist_id")
-      .eq("viewer_artist_id", session.artistId);
-    const targetIds = (collabRows ?? []).map((r) => r.target_artist_id);
+    const targetIds = collaboratorTargetIds;
 
     if (targetIds.length > 0) {
       const [targetArtistsResult, targetProductsResult, pendingOrdersResult] = await Promise.all([
@@ -1040,12 +1088,9 @@ export default async function VendorDashboardPage({
                 Orders — pending <span style={{ fontSize: 12, color: "#666", fontWeight: "normal" }}>({pendingTrackerOrders.length})</span>
               </h2>
               <p style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>
-                Online orders containing this stall's products, awaiting review.
+                Online orders containing this stall's products (or a collaborator stall's), awaiting review.
               </p>
-              {pendingTrackerOrders.length === 0 && <p style={{ fontSize: 13, color: "#999" }}>None right now.</p>}
-              {pendingTrackerOrders.map((o) => (
-                <TrackerOrderRow key={o.id} order={o} />
-              ))}
+              <WeeklyOrders sections={pendingWeeks} emptyMessage="None right now." />
             </section>
 
             <section style={card}>
@@ -1053,16 +1098,11 @@ export default async function VendorDashboardPage({
                 Orders — processed <span style={{ fontSize: 12, color: "#666", fontWeight: "normal" }}>({processedTrackerOrders.length})</span>
               </h2>
               <p style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>Approved, shipped, or delivered.</p>
-              {processedTrackerOrders.length === 0 && <p style={{ fontSize: 13, color: "#999" }}>None yet.</p>}
-              {processedTrackerOrders.map((o) => (
-                <TrackerOrderRow key={o.id} order={o} />
-              ))}
+              <WeeklyOrders sections={processedWeeks} emptyMessage="None yet." />
               {otherTrackerOrders.length > 0 && (
                 <>
                   <h3 style={{ fontSize: 13, color: "#666", margin: "16px 0 8px" }}>Rejected / cancelled / out of stock</h3>
-                  {otherTrackerOrders.map((o) => (
-                    <TrackerOrderRow key={o.id} order={o} />
-                  ))}
+                  <WeeklyOrders sections={otherWeeks} emptyMessage="None." />
                 </>
               )}
             </section>

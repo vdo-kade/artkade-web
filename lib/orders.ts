@@ -42,3 +42,36 @@ export const NEXT_STATUSES: Record<string, string[]> = {
   approved: ["shipped", "out_of_stock", "cancelled"],
   shipped: ["delivered", "cancelled"],
 };
+
+export type WeekGroup<T> = { weekKey: string; weekLabel: string; orders: T[] };
+
+const MONTH_ABBREVS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function startOfWeek(date: Date): Date {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dayIndex = d.getDay(); // 0 = Sun .. 6 = Sat
+  const diffToMonday = (dayIndex + 6) % 7;
+  d.setDate(d.getDate() - diffToMonday);
+  return d;
+}
+
+// Groups into Monday-anchored weeks, most recent week first (e.g. "Week of
+// 21 Jul") -- shared by the God dashboard's order-review page and the
+// vendor Tracker tab, whose order rows don't share a field name for their
+// timestamp (`created_at` vs `createdAt`), hence the accessor rather than
+// assuming a shape.
+export function groupByWeek<T>(items: T[], getCreatedAt: (item: T) => string): WeekGroup<T>[] {
+  const buckets = new Map<string, T[]>();
+  for (const item of items) {
+    const weekStart = startOfWeek(new Date(getCreatedAt(item)));
+    const key = weekStart.toISOString().slice(0, 10);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(item);
+  }
+  return Array.from(buckets.entries())
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    .map(([key, orders]) => {
+      const d = new Date(key);
+      return { weekKey: key, weekLabel: `Week of ${d.getDate()} ${MONTH_ABBREVS[d.getMonth()]}`, orders };
+    });
+}

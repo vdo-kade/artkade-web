@@ -78,6 +78,23 @@ create table products (
   -- but not constrained to it at the DB level since a future apparel-like
   -- category might want the same override.
   sizing_chart_url text,
+  -- Product-level sibling of product_variants.edition_size/stock: when
+  -- true, every variant of this product shares ONE stock number instead of
+  -- each tracking its own run independently (t-shirts -- one size selling
+  -- out shrinks what's left for every other size). decrementStock/
+  -- restoreStock (lib/stock.ts) apply a single delta to every sibling
+  -- variant row when this is set, which keeps product_variants.stock
+  -- identical across all of them -- that shared, synced value is what the
+  -- per-size breakdown, the card, and the edition badge all read, so
+  -- nothing downstream needs to know this flag exists. Prints stay on the
+  -- default per-variant model.
+  shared_stock_pool boolean not null default false,
+  -- Vendor-facing toggle, separate from is_one_off (a single always-1
+  -- item). When true, the product card shows a collective "N of M left"
+  -- marker aggregated across all variants -- see lib/catalogue.ts's
+  -- computeEditionAggregate. Purely a display concept; doesn't affect
+  -- stock/edition_size tracking itself.
+  is_exclusive_drop boolean not null default false,
   created_at timestamptz not null default now()
 );
 

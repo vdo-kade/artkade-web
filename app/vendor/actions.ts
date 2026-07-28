@@ -212,6 +212,15 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
   }
   if (variants.length === 0) return { ok: false, error: "Add at least one valid variant." };
 
+  // Shared-pool products need every variant to start at the same stock
+  // number (see lib/stock.ts) -- there's no separate "pool size" field on
+  // this form, so the first row's stock doubles as the whole pool's size
+  // and gets applied to every size instead of letting them start uneven.
+  if (category === "tshirt") {
+    const poolStock = variants[0].stock;
+    for (const v of variants) v.stock = poolStock;
+  }
+
   const supabase = createAdminClient();
   const { data: artist } = await supabase
     .from("artists")
@@ -253,6 +262,11 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
       category,
       image_url: imageUrl,
       is_one_off: isOneOff,
+      // T-shirts share one stock pool across every size instead of each
+      // running independently -- see lib/stock.ts. Derived from category
+      // rather than a vendor-facing toggle since it's a structural rule
+      // for the category, not a per-product editorial choice.
+      shared_stock_pool: category === "tshirt",
       sort_order: nextSortOrder,
     })
     .select("id")
@@ -298,6 +312,7 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   const category = formData.get("category");
   const isActive = formData.get("isActive") === "on";
   const isOneOff = formData.get("isOneOff") === "on";
+  const isExclusiveDrop = formData.get("isExclusiveDrop") === "on";
   const file = formData.get("photo");
   const sizingChartFile = formData.get("sizingChartPhoto");
   const removeSizingChart = formData.get("removeSizingChart") === "on";
@@ -314,12 +329,16 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   // artistId for a vendor.
   let ownerQuery = supabase
     .from("products")
-    .select("id, artists(slug)")
+    .select("id, shared_stock_pool, artists(slug)")
     .eq("id", productId);
   if (session.role === "vendor") {
     ownerQuery = ownerQuery.eq("artist_id", session.artistId);
   }
-  const { data: existing } = await ownerQuery.maybeSingle<{ id: string; artists: { slug: string } | null }>();
+  const { data: existing } = await ownerQuery.maybeSingle<{
+    id: string;
+    shared_stock_pool: boolean;
+    artists: { slug: string } | null;
+  }>();
   if (!existing || !existing.artists) return { ok: false, error: "Product not found." };
 
   let imageUrl: string | undefined;
@@ -349,6 +368,7 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
       category,
       is_active: isActive,
       is_one_off: isOneOff,
+      is_exclusive_drop: isExclusiveDrop,
       ...(imageUrl ? { image_url: imageUrl } : {}),
       ...(sizingChartUrl !== undefined ? { sizing_chart_url: sizingChartUrl } : {}),
     })
@@ -358,12 +378,20 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
     return { ok: false, error: "Something went wrong. Check server logs." };
   }
 
+  // Shared-pool products (see lib/stock.ts) submit one combined stock field
+  // instead of a variantStock-<id> per row -- applying it to every sibling
+  // here keeps them numerically identical, the invariant decrementStock/
+  // restoreStock rely on to move the whole pool together.
+  const sharedStockValue = existing.shared_stock_pool
+    ? Math.max(0, Math.floor(Number(formData.get("sharedStock")) || 0))
+    : null;
+
   const variantIds = formData.getAll("variantId") as string[];
   const variantResults = await Promise.all(
     variantIds.map((variantId) => {
       const label = formData.get(`variantLabel-${variantId}`);
+      const stock = sharedStockValue ?? Number(formData.get(`variantStock-${variantId}`));
       const price = Number(formData.get(`variantPrice-${variantId}`));
-      const stock = Number(formData.get(`variantStock-${variantId}`));
       if (typeof label !== "string" || !label.trim()) return null;
       if (!Number.isFinite(price) || price < 0) return null;
       if (!Number.isFinite(stock) || stock < 0) return null;

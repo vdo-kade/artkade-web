@@ -16,6 +16,8 @@ type ProductRow = {
   sold_count: number;
   sort_order: number;
   drop_ends_at: string | null;
+  shared_stock_pool: boolean;
+  is_exclusive_drop: boolean;
   product_variants: VariantRow[];
 };
 
@@ -38,7 +40,46 @@ export type ArtistWithProducts = ArtistRow & {
 // Shared select fragment so the landing page's flat product list and the
 // stall page's nested `artists.products` query stay in sync.
 export const PRODUCT_SELECT =
-  "id, artist_id, name, slug, category, image_url, is_bestseller, is_one_off, sold_count, sort_order, drop_ends_at, product_variants(id, label, price, stock, edition_size)";
+  "id, artist_id, name, slug, category, image_url, is_bestseller, is_one_off, sold_count, sort_order, drop_ends_at, shared_stock_pool, is_exclusive_drop, product_variants(id, label, price, stock, edition_size)";
+
+// Collective "N of M left" across every variant of a product -- the
+// aggregate the card badge (is_exclusive_drop) and the shared-pool stock
+// count both need, computed the same way so they never disagree.
+//
+// Shared-pool products (t-shirts) keep every sibling variant's stock and
+// edition_size numerically identical by construction (see lib/stock.ts),
+// so the aggregate is just that one repeated value, not a sum -- summing
+// would multiply a single 50-unit pool by however many sizes exist.
+// Per-variant products (prints) genuinely run independent editions, so
+// there the aggregate is a real sum across whichever variants are tracked
+// (edition_size != null); untracked variants (stickers, digital) don't
+// contribute a "total" to sum in the first place.
+export function computeEditionAggregate(
+  sharedStockPool: boolean,
+  variants: VariantRow[]
+): { remaining: number; total: number } | undefined {
+  if (sharedStockPool) {
+    const pooled = variants.find((v) => v.edition_size != null);
+    return pooled ? { remaining: pooled.stock, total: pooled.edition_size! } : undefined;
+  }
+  const tracked = variants.filter((v) => v.edition_size != null);
+  if (tracked.length === 0) return undefined;
+  return {
+    remaining: tracked.reduce((sum, v) => sum + v.stock, 0),
+    total: tracked.reduce((sum, v) => sum + v.edition_size!, 0),
+  };
+}
+
+// Same shared-pool awareness as computeEditionAggregate, but for plain
+// "how many units does this product have left" reporting (card fallback
+// text, vendor/admin dashboard stock totals) that doesn't care about
+// edition_size at all. A shared pool's sibling variants are kept
+// numerically identical (see lib/stock.ts), so summing them would multiply
+// one pool by however many sizes it has.
+export function productStockTotal(sharedStockPool: boolean, variants: { stock: number }[]): number {
+  if (!sharedStockPool) return variants.reduce((sum, v) => sum + v.stock, 0);
+  return variants[0]?.stock ?? 0;
+}
 
 export function formatPriceLabel(variants: VariantRow[]): string {
   if (variants.length === 0) return "";
@@ -75,6 +116,7 @@ export function formatSizeLabel(category: string, variants: VariantRow[]): strin
 // filter), so a single shared embed shape can't cleanly serve all three
 // call sites. Each caller supplies the slug it already has in scope.
 export function mapProduct(row: ProductRow, stallSlug: string): Product {
+  const editionAggregate = computeEditionAggregate(row.shared_stock_pool, row.product_variants);
   return {
     id: row.id,
     artistId: row.artist_id,
@@ -84,11 +126,12 @@ export function mapProduct(row: ProductRow, stallSlug: string): Product {
     imageUrl: row.image_url ?? undefined,
     priceLabel: formatPriceLabel(row.product_variants),
     sizeLabel: formatSizeLabel(row.category, row.product_variants),
-    stockRemaining: row.product_variants.reduce((sum, v) => sum + v.stock, 0),
+    stockRemaining: productStockTotal(row.shared_stock_pool, row.product_variants),
     isBestseller: row.is_bestseller,
     isOneOff: row.is_one_off,
     soldCount: row.sold_count,
     dropEndsAt: row.drop_ends_at ?? undefined,
+    exclusiveDropStock: row.is_exclusive_drop ? editionAggregate : undefined,
     variants: row.product_variants.map((v) => ({
       id: v.id,
       label: v.label,

@@ -15,6 +15,14 @@ import type { createAdminClient } from "./supabase-admin";
 // this retries against a fresh read instead of blindly overwriting --
 // that's what actually stops two concurrent buyers of a stock=1 one-off
 // from both succeeding, not just checking stock > 0 before writing.
+//
+// Shared-pool products (products.shared_stock_pool -- see schema.sql)
+// swap the guard's target: instead of matching this one variant's id, it
+// matches every sibling variant under the same product_id. Since a shared
+// pool only ever moves through this same CAS guard, every sibling stays at
+// an identical stock value by construction, so a single UPDATE statement
+// (one round trip, still one atomic write) drops all of them together --
+// no separate per-product counter to keep in sync with product_variants.
 export async function decrementStock(
   supabase: ReturnType<typeof createAdminClient>,
   variantId: string,
@@ -24,21 +32,22 @@ export async function decrementStock(
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const { data: current, error: readError } = await supabase
       .from("product_variants")
-      .select("stock")
+      .select("stock, product_id, products(shared_stock_pool)")
       .eq("id", variantId)
-      .maybeSingle();
+      .maybeSingle<{ stock: number; product_id: string; products: { shared_stock_pool: boolean } | null }>();
     if (readError || !current) return { ok: false, availableStock: 0 };
     if (current.stock < quantity) return { ok: false, availableStock: current.stock };
 
-    const { data: updated, error: updateError } = await supabase
+    const sharedPool = current.products?.shared_stock_pool ?? false;
+    let query = supabase
       .from("product_variants")
       .update({ stock: current.stock - quantity })
-      .eq("id", variantId)
-      .eq("stock", current.stock)
-      .select("id");
+      .eq("stock", current.stock);
+    query = sharedPool ? query.eq("product_id", current.product_id) : query.eq("id", variantId);
+    const { data: updated, error: updateError } = await query.select("id");
     if (updateError) return { ok: false, availableStock: current.stock };
     if (updated && updated.length > 0) return { ok: true };
-    // Row changed under us between the read and the write -- loop and
+    // Row(s) changed under us between the read and the write -- loop and
     // retry against a fresh read rather than risk a lost update.
   }
   return { ok: false, availableStock: -1 };
@@ -46,7 +55,10 @@ export async function decrementStock(
 
 // Same compare-and-swap pattern, used to release a reservation: order
 // creation failed after stock was already taken (see placeOrder), or an
-// admin rejects an order that had reserved stock (see rejectOrder).
+// admin rejects an order that had reserved stock (see rejectOrder). Mirrors
+// decrementStock's shared-pool handling -- a restore has to land on every
+// sibling variant too, or a rejected t-shirt order would silently widen the
+// gap between this variant's stock and the rest of the pool.
 export async function restoreStock(
   supabase: ReturnType<typeof createAdminClient>,
   variantId: string,
@@ -54,14 +66,19 @@ export async function restoreStock(
 ): Promise<void> {
   const MAX_ATTEMPTS = 5;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const { data: current } = await supabase.from("product_variants").select("stock").eq("id", variantId).maybeSingle();
+    const { data: current } = await supabase
+      .from("product_variants")
+      .select("stock, product_id, products(shared_stock_pool)")
+      .eq("id", variantId)
+      .maybeSingle<{ stock: number; product_id: string; products: { shared_stock_pool: boolean } | null }>();
     if (!current) return;
-    const { data: updated } = await supabase
+    const sharedPool = current.products?.shared_stock_pool ?? false;
+    let query = supabase
       .from("product_variants")
       .update({ stock: current.stock + quantity })
-      .eq("id", variantId)
-      .eq("stock", current.stock)
-      .select("id");
+      .eq("stock", current.stock);
+    query = sharedPool ? query.eq("product_id", current.product_id) : query.eq("id", variantId);
+    const { data: updated } = await query.select("id");
     if (updated && updated.length > 0) return;
   }
   console.error(`Failed to restore ${quantity} unit(s) of stock for variant ${variantId} after ${MAX_ATTEMPTS} attempts.`);

@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { getCachedUser } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import { logout } from "@/app/admin/actions";
-import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/catalogue";
+import { CATEGORY_LABELS, CATEGORY_ORDER, productStockTotal } from "@/lib/catalogue";
 import { FREEBIE_CATEGORY_LABELS, FREEBIE_CATEGORY_ORDER, FREEBIE_SELECT, type FreebieRow } from "@/lib/freebies";
 import { ORDER_STATUS_LABELS } from "@/lib/orders";
 import {
@@ -53,6 +53,8 @@ type ProductRow = {
   is_one_off: boolean;
   sold_count: number;
   sizing_chart_url: string | null;
+  shared_stock_pool: boolean;
+  is_exclusive_drop: boolean;
   product_variants: VariantRow[];
 };
 
@@ -256,6 +258,28 @@ function ProductEditCard({ product }: { product: ProductRow }) {
             Stock is capped at 1 below and won't restock once sold.
           </p>
         )}
+        {/* Separate from isOneOff above -- this doesn't touch stock at all,
+            it just puts a "N of M left" marker on the product card (see
+            EditionBadge / lib/catalogue.ts's computeEditionAggregate). */}
+        <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
+          <input type="checkbox" name="isExclusiveDrop" defaultChecked={product.is_exclusive_drop} /> Exclusive
+          drop (shows collective stock on the product card)
+        </label>
+
+        {product.shared_stock_pool && (
+          <div style={{ border: "1px solid #eee", borderRadius: 4, padding: 8, marginBottom: 8 }}>
+            <label style={{ fontSize: 12, color: "#666" }}>
+              Shared stock pool (one number split across every size below)
+            </label>
+            <input
+              type="number"
+              min={0}
+              name="sharedStock"
+              defaultValue={product.product_variants[0]?.stock ?? 0}
+              style={{ width: 100, padding: 4, boxSizing: "border-box", display: "block", marginTop: 4 }}
+            />
+          </div>
+        )}
 
         {product.product_variants.map((variant) => (
           <div key={variant.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -274,15 +298,19 @@ function ProductEditCard({ product }: { product: ProductRow }) {
               defaultValue={variant.price}
               style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
             />
-            <label style={{ fontSize: 12, color: "#666" }}>Stock</label>
-            <input
-              type="number"
-              min={0}
-              max={product.is_one_off ? 1 : undefined}
-              name={`variantStock-${variant.id}`}
-              defaultValue={product.is_one_off ? Math.min(variant.stock, 1) : variant.stock}
-              style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
-            />
+            {!product.shared_stock_pool && (
+              <>
+                <label style={{ fontSize: 12, color: "#666" }}>Stock</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={product.is_one_off ? 1 : undefined}
+                  name={`variantStock-${variant.id}`}
+                  defaultValue={product.is_one_off ? Math.min(variant.stock, 1) : variant.stock}
+                  style={{ width: 80, flexShrink: 0, padding: 4, boxSizing: "border-box" }}
+                />
+              </>
+            )}
           </div>
         ))}
         <button type="submit" style={{ padding: "6px 14px", marginTop: 8 }}>
@@ -350,7 +378,7 @@ export default async function VendorDashboardPage({
     supabase
       .from("products")
       .select(
-        "id, category, name, description, image_url, is_active, is_one_off, sold_count, sizing_chart_url, product_variants(id, label, price, stock)"
+        "id, category, name, description, image_url, is_active, is_one_off, sold_count, sizing_chart_url, shared_stock_pool, is_exclusive_drop, product_variants(id, label, price, stock)"
       )
       .eq("artist_id", selectedArtistId)
       .order("sort_order")
@@ -546,7 +574,7 @@ export default async function VendorDashboardPage({
   // straight from the "Products & stock" heading into 30+ fully-expanded
   // per-product edit forms with no summary at all.
   const totalStockUnits = (products ?? []).reduce(
-    (sum, p) => sum + p.product_variants.reduce((s, v) => s + v.stock, 0),
+    (sum, p) => sum + productStockTotal(p.shared_stock_pool, p.product_variants),
     0
   );
 
@@ -716,7 +744,7 @@ export default async function VendorDashboardPage({
                   id: product.id,
                   name: product.name,
                   imageUrl: product.image_url,
-                  stockRemaining: product.product_variants.reduce((s, v) => s + v.stock, 0),
+                  stockRemaining: productStockTotal(product.shared_stock_pool, product.product_variants),
                   isActive: product.is_active,
                   editCard: <ProductEditCard product={product} />,
                 })),

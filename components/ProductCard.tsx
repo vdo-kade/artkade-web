@@ -30,6 +30,13 @@ export type Product = {
   isOneOff?: boolean;
   soldCount?: number;
   dropEndsAt?: string;
+  // Set only when the vendor's "exclusive drop" toggle is on (see
+  // lib/catalogue.ts's computeEditionAggregate) -- collective stock summed
+  // across every variant, read against the original combined total. The
+  // per-size breakdown itself lives on the product detail page only; this
+  // is just the card-level aggregate that a single-variant EditionBadge
+  // can't represent once a product has more than one size.
+  exclusiveDropStock?: { remaining: number; total: number };
   variants?: ProductVariant[];
 };
 
@@ -38,14 +45,15 @@ export default function ProductCard({ product }: { product: Product }) {
 
   // A single-variant limited-run product (the common case -- most prints
   // only ever have one size) has one unambiguous fraction to show in this
-  // corner. A multi-variant product (e.g. A6/A5/A3, each its own run) has
-  // no single number that represents all of them, so the card falls back
-  // to its existing aggregate "Only N left" line below and the real
-  // per-variant breakdown lives on the product detail page instead.
+  // corner. A multi-variant product (e.g. A6/A5/A3, each its own run) used
+  // to have no single number that represented all of them -- that gap is
+  // exactly what exclusiveDropStock (the vendor's "exclusive drop" toggle)
+  // fills, so it takes priority here when set.
   const editionVariant =
-    !product.isOneOff && product.variants?.length === 1 && product.variants[0].editionSize != null
+    !product.isOneOff && !product.exclusiveDropStock && product.variants?.length === 1 && product.variants[0].editionSize != null
       ? product.variants[0]
       : undefined;
+  const hasEditionMarker = !product.isOneOff && (!!product.exclusiveDropStock || !!editionVariant);
 
   return (
     <div
@@ -62,6 +70,13 @@ export default function ProductCard({ product }: { product: Product }) {
         <span className="absolute -top-2 right-3 bg-accent text-white text-[10px] font-mono uppercase tracking-wide px-2 py-1">
           1 of 1
         </span>
+      )}
+      {!product.isOneOff && product.exclusiveDropStock && (
+        <EditionBadge
+          stock={product.exclusiveDropStock.remaining}
+          editionSize={product.exclusiveDropStock.total}
+          className="absolute -top-2 right-3"
+        />
       )}
       {editionVariant && (
         <EditionBadge
@@ -94,9 +109,9 @@ export default function ProductCard({ product }: { product: Product }) {
           <span className="font-mono">{product.priceLabel}</span>
           {soldOut ? (
             <span className="font-mono text-xs uppercase text-warm-grey">
-              {product.isOneOff || editionVariant ? "Sold, won't return" : "Sold out"}
+              {product.isOneOff || hasEditionMarker ? "Sold, won't return" : "Sold out"}
             </span>
-          ) : product.isOneOff || editionVariant ? null : product.stockRemaining !== undefined && product.stockRemaining <= 10 ? (
+          ) : product.isOneOff || hasEditionMarker ? null : product.stockRemaining !== undefined && product.stockRemaining <= 10 ? (
             <span className="font-mono text-xs text-accent">
               Only {product.stockRemaining} left
             </span>

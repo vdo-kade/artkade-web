@@ -10,6 +10,7 @@ import DeleteVendorButton from "./DeleteVendorButton";
 import Countdown from "@/components/Countdown";
 import AdminNav from "@/components/AdminNav";
 import { ActionForm } from "@/components/ActionForm";
+import { productStockTotal } from "@/lib/catalogue";
 
 export const revalidate = 0;
 
@@ -26,6 +27,7 @@ type ArtistRow = {
 type ProductForSummary = {
   id: string;
   artist_id: string;
+  shared_stock_pool: boolean;
   product_variants: { stock: number }[];
 };
 
@@ -115,7 +117,10 @@ export default async function GodDashboardPage() {
       .select("id, slug, name, is_active, is_popup, popup_starts_at, popup_ends_at")
       .order("sort_order")
       .returns<ArtistRow[]>(),
-    supabase.from("products").select("id, artist_id, product_variants(stock)").returns<ProductForSummary[]>(),
+    supabase
+      .from("products")
+      .select("id, artist_id, shared_stock_pool, product_variants(stock)")
+      .returns<ProductForSummary[]>(),
     supabase
       .from("orders")
       .select("id, order_items(product_id)")
@@ -144,7 +149,7 @@ export default async function GodDashboardPage() {
   const productArtistMap = new Map<string, string>();
   for (const p of products) {
     productArtistMap.set(p.id, p.artist_id);
-    const sum = p.product_variants.reduce((s, v) => s + v.stock, 0);
+    const sum = productStockTotal(p.shared_stock_pool, p.product_variants);
     stockByArtist.set(p.artist_id, (stockByArtist.get(p.artist_id) ?? 0) + sum);
   }
 

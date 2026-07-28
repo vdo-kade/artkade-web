@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type ReactNode } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import Image from "next/image";
 import { reorderProducts } from "./actions";
 
@@ -17,10 +17,6 @@ export type StockGridProduct = {
 };
 
 export type StockGridSection = { title: string; category: string; products: StockGridProduct[] };
-
-function keyOf(sections: StockGridSection[]): string {
-  return sections.map((s) => `${s.category}:${s.products.map((p) => p.id).join(",")}`).join("|");
-}
 
 // Thumbnail-grid replacement for what used to be a full-height stack of
 // fully-expanded edit forms, one per product, on the vendor dashboard's
@@ -41,17 +37,34 @@ export default function ProductStockGrid({
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Same resync-on-fingerprint-change trick as ProductImageManager/
-  // ProductVariantManager: local `localSections` mirrors the server's
-  // `sections` prop so a drag can show an instant reorder preview, but
-  // resets from the fresh prop once the reorder actually persists (or on
-  // any other change to the underlying product list, e.g. a delete).
-  const [localSections, setLocalSections] = useState(sections);
-  const [syncedKey, setSyncedKey] = useState(() => keyOf(sections));
-  const incomingKey = keyOf(sections);
-  if (incomingKey !== syncedKey) {
-    setSyncedKey(incomingKey);
-    setLocalSections(sections);
+  // Only the DISPLAY ORDER within a category is ever cached locally, as a
+  // short-lived optimistic override between a drop and the next server
+  // round-trip -- product content (name/image/editCard/stock) always comes
+  // straight from the live `sections` prop below, never a locally cached
+  // copy of it. Caching whole product/section objects locally (as an
+  // earlier version of this component did) went stale the instant a
+  // product's own data changed without its position changing too -- e.g.
+  // saving an edit inside an expanded editCard revalidates the page, but
+  // the *set* of product ids in its section doesn't change, so a
+  // fingerprint keyed on ids alone never noticed and kept rendering the
+  // stale pre-save editCard. Clearing on every new `sections` reference
+  // (which a server revalidation always produces, including the one this
+  // same drag's own persistOrder call triggers) means the override never
+  // outlives the round-trip that made it unnecessary.
+  const [orderOverride, setOrderOverride] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    setOrderOverride({});
+  }, [sections]);
+
+  function displayProducts(section: StockGridSection): StockGridProduct[] {
+    const order = orderOverride[section.category];
+    if (!order) return section.products;
+    const byId = new Map(section.products.map((p) => [p.id, p]));
+    const ordered = order.map((id) => byId.get(id)).filter((p): p is StockGridProduct => !!p);
+    // Defensive: if the live prop's product set has changed underneath the
+    // override (a product added/removed/moved category since the drag),
+    // fall back to the fresh order rather than risk dropping a product.
+    return ordered.length === section.products.length ? ordered : section.products;
   }
 
   const [, startTransition] = useTransition();
@@ -59,7 +72,7 @@ export default function ProductStockGrid({
   const [overIndex, setOverIndex] = useState<number | null>(null);
 
   function persistOrder(category: string, next: StockGridProduct[]) {
-    setLocalSections((prev) => prev.map((s) => (s.category === category ? { ...s, products: next } : s)));
+    setOrderOverride((prev) => ({ ...prev, [category]: next.map((p) => p.id) }));
     const fd = new FormData();
     fd.set("artistId", artistId);
     next.forEach((p) => fd.append("productId", p.id));
@@ -77,9 +90,10 @@ export default function ProductStockGrid({
     const from = drag;
     setDrag(null);
     if (!from || from.category !== category || from.index === dropIndex) return;
-    const section = localSections.find((s) => s.category === category);
+    const section = sections.find((s) => s.category === category);
     if (!section) return;
-    const next = [...section.products];
+    const current = displayProducts(section);
+    const next = [...current];
     const [moved] = next.splice(from.index, 1);
     next.splice(dropIndex, 0, moved);
     persistOrder(category, next);
@@ -87,8 +101,9 @@ export default function ProductStockGrid({
 
   return (
     <div>
-      {localSections.map((section) => {
-        const expandedProduct = section.products.find((p) => p.id === expandedId);
+      {sections.map((section) => {
+        const products = displayProducts(section);
+        const expandedProduct = products.find((p) => p.id === expandedId);
         return (
           <div key={section.title} style={{ marginTop: 24 }}>
             <h3
@@ -100,7 +115,7 @@ export default function ProductStockGrid({
                 marginBottom: 10,
               }}
             >
-              {section.title} ({section.products.length})
+              {section.title} ({products.length})
             </h3>
             <div
               style={{
@@ -109,7 +124,7 @@ export default function ProductStockGrid({
                 gap: 10,
               }}
             >
-              {section.products.map((p, index) => {
+              {products.map((p, index) => {
                 const isExpanded = p.id === expandedId;
                 const isDragging = drag?.category === section.category && drag.index === index;
                 const isOver = drag?.category === section.category && overIndex === index && !isDragging;

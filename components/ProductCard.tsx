@@ -3,6 +3,7 @@ import Countdown from "./Countdown";
 import AddToBagButton from "./AddToBagButton";
 import ExpandableImage from "./ExpandableImage";
 import EditionBadge from "./EditionBadge";
+import { PRODUCT_TYPE_LABELS } from "@/lib/catalogue";
 
 export type ProductVariant = {
   id: string;
@@ -22,6 +23,12 @@ export type Product = {
   slug: string;
   stallSlug: string;
   name: string;
+  // Raw product_category enum value (see supabase/schema.sql) -- rendered
+  // via PRODUCT_TYPE_LABELS as a small tag next to the name, since some
+  // stalls sell a print and a t-shirt under the identical name (Nuwan's
+  // "Fractal Theory", Vdokade's "Susie Splosion") with nothing else on the
+  // card to tell them apart.
+  category: string;
   imageUrl?: string;
   priceLabel: string; // e.g. "from Rs. 1,000"
   sizeLabel?: string; // e.g. "A6–A3" / "Small–Large" -- prints & stickers only
@@ -101,6 +108,9 @@ export default function ProductCard({ product }: { product: Product }) {
       />
 
       <div className="pt-3 px-1">
+        <p className="font-mono text-[10px] uppercase tracking-eyebrow text-warm-grey mb-0.5">
+          {PRODUCT_TYPE_LABELS[product.category] ?? product.category}
+        </p>
         {/* Opens as a layered overlay (intercepting route) when clicked from
             here, but is still a real shareable URL -- see
             app/stalls/[slug]/@modal and app/stalls/[slug]/products. */}

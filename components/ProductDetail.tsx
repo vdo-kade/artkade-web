@@ -6,7 +6,7 @@ import SizeGuideButton from "./SizeGuideButton";
 import ViewTracker from "./ViewTracker";
 import RecentlyViewed from "./RecentlyViewed";
 import EditionBadge from "./EditionBadge";
-import type { ProductDetail as ProductDetailData } from "@/lib/catalogue";
+import { PRODUCT_TYPE_LABELS, type ProductDetail as ProductDetailData } from "@/lib/catalogue";
 
 // Shared by both the real page (app/stalls/[slug]/products/[productSlug])
 // and the intercepted-route modal (app/stalls/[slug]/@modal) -- only the
@@ -46,6 +46,9 @@ export default function ProductDetail({ product }: { product: ProductDetailData 
           >
             {product.stallName}
           </Link>
+          <p className="font-mono text-xs uppercase tracking-eyebrow text-warm-grey mt-1">
+            {PRODUCT_TYPE_LABELS[product.category] ?? product.category}
+          </p>
           <h1 className="font-display text-3xl mt-1 mb-3">{product.name}</h1>
 
           {product.dropEndsAt && !soldOut && (

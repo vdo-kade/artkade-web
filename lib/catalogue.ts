@@ -123,6 +123,7 @@ export function mapProduct(row: ProductRow, stallSlug: string): Product {
     slug: row.slug,
     stallSlug,
     name: row.name,
+    category: row.category,
     imageUrl: row.image_url ?? undefined,
     priceLabel: formatPriceLabel(row.product_variants),
     sizeLabel: formatSizeLabel(row.category, row.product_variants),
@@ -165,6 +166,23 @@ export const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export const CATEGORY_ORDER = Object.keys(CATEGORY_LABELS);
+
+// Per-product type label shown on the card and detail page (e.g. "Print",
+// "T-Shirt") -- distinct from CATEGORY_LABELS above, which are plural
+// section headings ("Print rack", "T-Shirts") meant for a whole group of
+// products, not a singular tag on one product. Two stalls each have a
+// print and a t-shirt sharing the same name (Nuwan's "Fractal Theory",
+// Vdokade's "Susie Splosion") with nothing on the card/detail page to
+// tell them apart -- this is derived from the same category column
+// CATEGORY_LABELS already reads, not a new field.
+export const PRODUCT_TYPE_LABELS: Record<string, string> = {
+  sticker_pack: "Sticker",
+  print: "Print",
+  tshirt: "T-Shirt",
+  digital: "Digital",
+  freebie: "Freebie",
+  other: "Other",
+};
 
 // Default display order for a stall that's never touched its category
 // order setting (artists.category_order, null/empty) -- t-shirts, then

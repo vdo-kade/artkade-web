@@ -235,6 +235,11 @@ export type ProductDetail = {
   // means "use the site-wide default table" (SizeGuideButton handles the
   // fallback).
   sizingChartUrl?: string;
+  // Set when products.shared_stock_pool is true (t-shirts) -- every sibling
+  // variant shares this one figure instead of running its own edition, so
+  // ProductDetail shows it once above the size list rather than repeating
+  // it as a per-row EditionBadge (see computeEditionAggregate).
+  sharedStock?: { remaining: number; total: number };
 };
 
 type ProductDetailRow = {
@@ -248,13 +253,14 @@ type ProductDetailRow = {
   sold_count: number;
   drop_ends_at: string | null;
   sizing_chart_url: string | null;
+  shared_stock_pool: boolean;
   product_variants: VariantRow[];
   product_images: { url: string; sort_order: number }[];
   artists: { slug: string; name: string; is_active: boolean } | null;
 };
 
 const PRODUCT_DETAIL_SELECT =
-  "id, name, slug, description, category, image_url, is_one_off, sold_count, drop_ends_at, sizing_chart_url, product_variants(id, label, price, stock, edition_size), product_images(url, sort_order), artists(slug, name, is_active)";
+  "id, name, slug, description, category, image_url, is_one_off, sold_count, drop_ends_at, sizing_chart_url, shared_stock_pool, product_variants(id, label, price, stock, edition_size), product_images(url, sort_order), artists(slug, name, is_active)";
 
 // Shared by both the real product page (app/stalls/[slug]/products/
 // [productSlug]/page.tsx) and its intercepted-route modal counterpart --
@@ -301,5 +307,8 @@ export async function getProductDetail(
     })),
     stallName: data.artists.name,
     stallSlug: data.artists.slug,
+    sharedStock: data.shared_stock_pool
+      ? computeEditionAggregate(data.shared_stock_pool, data.product_variants)
+      : undefined,
   };
 }

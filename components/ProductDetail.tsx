@@ -99,6 +99,16 @@ export default function ProductDetail({ product }: { product: ProductDetailData 
               <p className="font-mono text-xs uppercase tracking-eyebrow text-warm-grey mb-2">
                 Available sizes
               </p>
+              {/* Shared-pool products (product.sharedStock set) run one
+                  edition across every sibling size, not one each -- shown
+                  once here instead of repeated per row, or "50 of 50 left"
+                  next to all five sizes reads as 250 total. */}
+              {product.sharedStock && (
+                <p className="mb-2 flex items-center gap-2">
+                  <EditionBadge stock={product.sharedStock.remaining} editionSize={product.sharedStock.total} />
+                  <span className="text-xs text-warm-grey">across all sizes</span>
+                </p>
+              )}
               <ul className="text-sm">
                 {product.variants.map((v) => (
                   <li
@@ -109,9 +119,9 @@ export default function ProductDetail({ product }: { product: ProductDetailData 
                     <span className="flex items-center gap-2">
                       <span className="font-mono text-warm-grey">
                         Rs. {v.price.toLocaleString("en-US")}
-                        {v.editionSize == null && v.stock <= 0 ? " · sold out" : ""}
+                        {!product.sharedStock && v.editionSize == null && v.stock <= 0 ? " · sold out" : ""}
                       </span>
-                      {v.editionSize != null && (
+                      {!product.sharedStock && v.editionSize != null && (
                         <EditionBadge stock={v.stock} editionSize={v.editionSize} />
                       )}
                     </span>

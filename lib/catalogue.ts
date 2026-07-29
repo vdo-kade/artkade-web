@@ -99,13 +99,37 @@ function shortSizeLabel(label: string): string {
 // beta feedback flagged as confusing with price alone) -- cheapest variant's
 // size through the priciest's, e.g. "A6–A3" or "Small–Large", collapsing to
 // a single tier when there's only one variant or they share a size label.
-export function formatSizeLabel(category: string, variants: VariantRow[]): string | undefined {
+// Takes already-price-sorted variants (see sortVariantsByPrice) so this
+// doesn't need its own sort pass.
+export function formatSizeLabel(category: string, sortedVariants: VariantRow[]): string | undefined {
   if (category !== "print" && category !== "sticker_pack") return undefined;
-  if (variants.length === 0) return undefined;
-  const sorted = [...variants].sort((a, b) => a.price - b.price);
-  const min = shortSizeLabel(sorted[0].label);
-  const max = shortSizeLabel(sorted[sorted.length - 1].label);
+  if (sortedVariants.length === 0) return undefined;
+  const min = shortSizeLabel(sortedVariants[0].label);
+  const max = shortSizeLabel(sortedVariants[sortedVariants.length - 1].label);
   return min === max ? min : `${min}–${max}`;
+}
+
+// Fixed fallback order for variants that tie on price -- t-shirt sizes are
+// all the same flat Rs. X, so price alone can't order S/M/L/XL/2XL. Without
+// this, ties fall back to whatever order the query happened to return them
+// in, which drifts by insertion route (creation form vs. the add-variant UI
+// vs. a direct DB fix like Rick Vedha's A3 size) instead of staying fixed.
+const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"];
+
+function sizeOrderIndex(label: string): number {
+  const idx = SIZE_ORDER.indexOf(shortSizeLabel(label).toUpperCase());
+  return idx === -1 ? SIZE_ORDER.length : idx;
+}
+
+// Canonical variant order for every surface that renders or defaults to a
+// variant (card dropdown + its pre-selected default, product detail's size
+// list, the vendor edit form) -- cheapest first, so whichever variant is
+// pre-selected always matches the "from Rs. X" price already shown on the
+// card. Applied once here at the query/derivation layer rather than in each
+// component, so a variant added through any route sorts correctly with no
+// further work.
+export function sortVariantsByPrice<T extends { label: string; price: number }>(variants: T[]): T[] {
+  return [...variants].sort((a, b) => a.price - b.price || sizeOrderIndex(a.label) - sizeOrderIndex(b.label));
 }
 
 // stallSlug is passed in explicitly rather than selected as a nested
@@ -116,7 +140,8 @@ export function formatSizeLabel(category: string, variants: VariantRow[]): strin
 // filter), so a single shared embed shape can't cleanly serve all three
 // call sites. Each caller supplies the slug it already has in scope.
 export function mapProduct(row: ProductRow, stallSlug: string): Product {
-  const editionAggregate = computeEditionAggregate(row.shared_stock_pool, row.product_variants);
+  const variants = sortVariantsByPrice(row.product_variants);
+  const editionAggregate = computeEditionAggregate(row.shared_stock_pool, variants);
   return {
     id: row.id,
     artistId: row.artist_id,
@@ -125,15 +150,15 @@ export function mapProduct(row: ProductRow, stallSlug: string): Product {
     name: row.name,
     category: row.category,
     imageUrl: row.image_url ?? undefined,
-    priceLabel: formatPriceLabel(row.product_variants),
-    sizeLabel: formatSizeLabel(row.category, row.product_variants),
-    stockRemaining: productStockTotal(row.shared_stock_pool, row.product_variants),
+    priceLabel: formatPriceLabel(variants),
+    sizeLabel: formatSizeLabel(row.category, variants),
+    stockRemaining: productStockTotal(row.shared_stock_pool, variants),
     isBestseller: row.is_bestseller,
     isOneOff: row.is_one_off,
     soldCount: row.sold_count,
     dropEndsAt: row.drop_ends_at ?? undefined,
     exclusiveDropStock: row.is_exclusive_drop ? editionAggregate : undefined,
-    variants: row.product_variants.map((v) => ({
+    variants: variants.map((v) => ({
       id: v.id,
       label: v.label,
       price: v.price,
@@ -287,6 +312,8 @@ export async function getProductDetail(
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((img) => ({ src: img.url, alt: data.name }));
 
+  const variants = sortVariantsByPrice(data.product_variants);
+
   return {
     id: data.id,
     name: data.name,
@@ -298,7 +325,7 @@ export async function getProductDetail(
     dropEndsAt: data.drop_ends_at ?? undefined,
     sizingChartUrl: data.sizing_chart_url ?? undefined,
     images: gallery.length > 0 ? gallery : data.image_url ? [{ src: data.image_url, alt: data.name }] : [],
-    variants: data.product_variants.map((v) => ({
+    variants: variants.map((v) => ({
       id: v.id,
       label: v.label,
       price: v.price,
@@ -307,8 +334,6 @@ export async function getProductDetail(
     })),
     stallName: data.artists.name,
     stallSlug: data.artists.slug,
-    sharedStock: data.shared_stock_pool
-      ? computeEditionAggregate(data.shared_stock_pool, data.product_variants)
-      : undefined,
+    sharedStock: data.shared_stock_pool ? computeEditionAggregate(data.shared_stock_pool, variants) : undefined,
   };
 }

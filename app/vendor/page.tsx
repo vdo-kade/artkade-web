@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { getCachedUser } from "@/lib/supabase-server";
 import { getSessionRole } from "@/lib/session-role";
 import { logout } from "@/app/admin/actions";
-import { CATEGORY_LABELS, CATEGORY_ORDER, productStockTotal, resolveCategoryOrder } from "@/lib/catalogue";
+import { CATEGORY_LABELS, CATEGORY_ORDER, productStockTotal, resolveCategoryOrder, sortVariantsByPrice } from "@/lib/catalogue";
 import { FREEBIE_CATEGORY_LABELS, FREEBIE_CATEGORY_ORDER, FREEBIE_SELECT, type FreebieRow } from "@/lib/freebies";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, groupByWeek } from "@/lib/orders";
 import {
@@ -215,7 +215,7 @@ function ProductViewCard({ product }: { product: ProductRow }) {
       </p>
       <table style={{ fontSize: 13, marginTop: 8 }}>
         <tbody>
-          {product.product_variants.map((v) => (
+          {sortVariantsByPrice(product.product_variants).map((v) => (
             <tr key={v.id}>
               <td style={{ paddingRight: 12 }}>{v.label}</td>
               <td style={{ paddingRight: 12 }}>Rs. {v.price}</td>
@@ -362,7 +362,7 @@ function ProductEditCard({ product }: { product: ProductRow }) {
           productId={product.id}
           sharedStockPool={product.shared_stock_pool}
           isOneOff={product.is_one_off}
-          variants={product.product_variants.map((v) => ({
+          variants={sortVariantsByPrice(product.product_variants).map((v) => ({
             id: v.id,
             label: v.label,
             price: v.price,

@@ -45,19 +45,21 @@ async function vendorOwnsWholeOrder(
 }
 
 // Single funnel every order action goes through for authorization -- admin
-// is unscoped, vendor is scoped to vendorOwnsWholeOrder above. A dead
-// session bounces to login (see app/vendor/actions.ts for the original
-// "why redirect instead of no-op" reasoning); an authenticated caller who
-// just isn't allowed to touch *this* order gets a real inline error
-// instead, since that's a normal, expected outcome for a vendor browsing
-// mixed-stall orders, not a broken session.
+// and restricted_admin are both unscoped (fulfilling any order is exactly
+// what restricted_admin is for -- see lib/session-role.ts), vendor is
+// scoped to vendorOwnsWholeOrder above. A dead session bounces to login
+// (see app/vendor/actions.ts for the original "why redirect instead of
+// no-op" reasoning); an authenticated caller who just isn't allowed to
+// touch *this* order gets a real inline error instead, since that's a
+// normal, expected outcome for a vendor browsing mixed-stall orders, not a
+// broken session.
 async function authorizeOrderAction(
   supabase: ReturnType<typeof createAdminClient>,
   orderId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
-  if (session.role === "admin") return { ok: true };
+  if (session.role === "admin" || session.role === "restricted_admin") return { ok: true };
   const allowed = await vendorOwnsWholeOrder(supabase, orderId, session.artistId);
   return allowed ? { ok: true } : { ok: false, error: NOT_YOUR_STALL_ERROR };
 }
@@ -231,7 +233,7 @@ export async function markOutOfStock(formData: FormData): Promise<ActionState> {
 // field in this app (stall bio, magazine body, etc).
 export async function updateInternalNotes(formData: FormData): Promise<ActionState> {
   const session = await getSessionRole();
-  if (session?.role !== "admin") redirect("/admin/login");
+  if (session?.role !== "admin" && session?.role !== "restricted_admin") redirect("/admin/login");
 
   const orderId = formData.get("orderId");
   const notes = formData.get("notes");

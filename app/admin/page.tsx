@@ -92,7 +92,10 @@ const STATUS_COLORS: Record<Status, string> = {
 
 export default async function GodDashboardPage() {
   const session = await getSessionRole();
-  if (session?.role !== "admin") redirect("/admin/login");
+  if (!session || (session.role !== "admin" && session.role !== "restricted_admin")) {
+    redirect("/admin/login");
+  }
+  const canManageStalls = session.role === "admin";
 
   let supabase: ReturnType<typeof createAdminClient>;
   try {
@@ -168,7 +171,7 @@ export default async function GodDashboardPage() {
 
   return (
     <>
-      <AdminNav role="admin" />
+      <AdminNav role={session.role} />
       <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 960, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
         <h1 style={{ fontSize: 24 }}>All stalls</h1>
@@ -184,19 +187,21 @@ export default async function GodDashboardPage() {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
-        <Link
-          href="/admin/vendors/new"
-          style={{ padding: "6px 14px", background: "#333", color: "#fff", textDecoration: "none", fontSize: 13 }}
-        >
-          + Add pop-up vendor
-        </Link>
-        <ActionForm action={checkExpiryNow} successMessage="Checked.">
-          <button type="submit" style={{ padding: "6px 14px", fontSize: 13 }}>
-            Check expiry now
-          </button>
-        </ActionForm>
-      </div>
+      {canManageStalls && (
+        <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
+          <Link
+            href="/admin/vendors/new"
+            style={{ padding: "6px 14px", background: "#333", color: "#fff", textDecoration: "none", fontSize: 13 }}
+          >
+            + Add pop-up vendor
+          </Link>
+          <ActionForm action={checkExpiryNow} successMessage="Checked.">
+            <button type="submit" style={{ padding: "6px 14px", fontSize: 13 }}>
+              Check expiry now
+            </button>
+          </ActionForm>
+        </div>
+      )}
 
       {artists.length === 0 && <p>No stalls yet.</p>}
 
@@ -242,7 +247,7 @@ export default async function GodDashboardPage() {
                 Manage &rarr;
               </Link>
 
-              {status === "scheduled" && (
+              {canManageStalls && status === "scheduled" && (
                 <ActionForm action={reactivateStall} successMessage="Activated.">
                   <input type="hidden" name="artistId" value={artist.id} />
                   <button type="submit" style={{ padding: "4px 10px", fontSize: 12 }}>
@@ -251,7 +256,7 @@ export default async function GodDashboardPage() {
                 </ActionForm>
               )}
 
-              {(status === "active-popup" || status === "archived-popup") && (
+              {canManageStalls && (status === "active-popup" || status === "archived-popup") && (
                 <ActionForm
                   action={extendPopup}
                   successMessage="Extended."
@@ -271,11 +276,12 @@ export default async function GodDashboardPage() {
                 </ActionForm>
               )}
 
-              {(status === "active-popup" || status === "scheduled" || status === "archived-popup") && (
-                <ConvertToPermanentButton artistId={artist.id} stallName={artist.name} />
-              )}
+              {canManageStalls &&
+                (status === "active-popup" || status === "scheduled" || status === "archived-popup") && (
+                  <ConvertToPermanentButton artistId={artist.id} stallName={artist.name} />
+                )}
 
-              {status === "inactive" && (
+              {canManageStalls && status === "inactive" && (
                 <ActionForm action={reactivateStall} successMessage="Reactivated.">
                   <input type="hidden" name="artistId" value={artist.id} />
                   <button type="submit" style={{ padding: "4px 10px", fontSize: 12 }}>
@@ -284,7 +290,7 @@ export default async function GodDashboardPage() {
                 </ActionForm>
               )}
 
-              <DeleteVendorButton artistId={artist.id} stallName={artist.name} />
+              {canManageStalls && <DeleteVendorButton artistId={artist.id} stallName={artist.name} />}
             </div>
           </div>
         );

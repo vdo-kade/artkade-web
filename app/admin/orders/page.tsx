@@ -289,7 +289,9 @@ export default async function AdminOrdersPage() {
   // than relying solely on middleware. See app/admin/orders/actions.ts for
   // why the actions need this same check.
   const session = await getSessionRole();
-  if (session?.role !== "admin") redirect("/admin/login");
+  if (!session || (session.role !== "admin" && session.role !== "restricted_admin")) {
+    redirect("/admin/login");
+  }
 
   let supabase: ReturnType<typeof createAdminClient>;
   try {
@@ -354,7 +356,7 @@ export default async function AdminOrdersPage() {
 
   return (
     <>
-      <AdminNav role="admin" />
+      <AdminNav role={session.role} />
       <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 960, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
         <h1 style={{ fontSize: 24 }}>Orders awaiting review</h1>

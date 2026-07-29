@@ -71,9 +71,14 @@ export async function middleware(request: NextRequest) {
 
   const role = user?.app_metadata?.role;
   const isAdmin = role === "admin";
+  const isRestrictedAdmin = role === "restricted_admin";
   const isVendor = role === "vendor";
 
-  const allowed = pathname.startsWith("/vendor") ? isAdmin || isVendor : isAdmin;
+  // restricted_admin reads everywhere admin does (both /admin/* and
+  // /vendor/*, the latter so it can browse any stall's dashboard) --
+  // app/vendor/actions.ts and friends are what actually deny it write
+  // access to catalogue/stall data, not this route gate.
+  const allowed = pathname.startsWith("/vendor") ? isAdmin || isRestrictedAdmin || isVendor : isAdmin || isRestrictedAdmin;
 
   // Same Server Action carve-out as the site gate above (isServerAction is
   // computed once, at the top of this function, and reused here).
@@ -81,15 +86,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/admin/login", request.url));
   }
 
-  // A vendor whose account still carries its original TempPasswordReveal
-  // password (see app/admin/vendors/create/route.ts) can't reach anything
-  // else in /vendor/* until they set a real one -- enforced here rather
+  // A vendor or restricted_admin whose account still carries its original
+  // TempPasswordReveal password (see app/admin/vendors/create/route.ts and
+  // app/admin/staff/create/route.ts) can't reach anything else in
+  // /admin/*/vendor/* until they set a real one -- enforced here rather
   // than just nudged from within the dashboard, because
   // app/vendor/page.tsx's DashboardTabs renders every tab's real data
   // server-side regardless of which tab is visually active, so a UI-only
   // nudge wouldn't actually withhold anything. Cleared by changePassword
   // in app/vendor/actions.ts.
-  const mustChangePassword = isVendor && user?.app_metadata?.must_change_password === true;
+  const mustChangePassword =
+    (isVendor || isRestrictedAdmin) && user?.app_metadata?.must_change_password === true;
   if (mustChangePassword && pathname !== "/vendor/change-password" && !isServerAction) {
     return NextResponse.redirect(new URL("/vendor/change-password", request.url));
   }

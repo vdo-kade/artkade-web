@@ -27,6 +27,14 @@ const MAX_SOCIAL_LINKS = 6;
 // artist for vendors -- admin writes are unscoped. Mirrors the ownership
 // pattern already used by app/admin/orders/actions.ts (service-role client
 // + explicit filters, no RLS).
+//
+// restricted_admin is the one role every write in this file explicitly
+// rejects outright (checked before any ownership logic runs) -- see
+// lib/session-role.ts's SessionRole doc comment for why. It's a real
+// authorization check on each action itself, not just a hidden button:
+// this file has no other gate a client could route around.
+const CATALOGUE_FORBIDDEN =
+  "Your account can view every stall and fulfil orders, but can't add, edit, or delete stalls, products, or freebies.";
 
 export async function updateStallDetails(formData: FormData): Promise<ActionState> {
   // A falsy session here means the Supabase auth session has actually
@@ -36,6 +44,7 @@ export async function updateStallDetails(formData: FormData): Promise<ActionStat
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const artistId = formData.get("artistId");
   const name = formData.get("name");
@@ -143,6 +152,7 @@ export async function updateCategoryOrder(formData: FormData): Promise<ActionSta
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const artistId = formData.get("artistId");
   const categories = formData.getAll("category") as string[];
@@ -178,6 +188,7 @@ export async function uploadStallPhoto(formData: FormData): Promise<ActionState>
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const artistId = formData.get("artistId");
   const field = formData.get("field");
@@ -262,6 +273,7 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const artistId = formData.get("artistId");
   const name = formData.get("name");
@@ -416,6 +428,7 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const productId = formData.get("productId");
   const name = formData.get("name");
@@ -601,6 +614,7 @@ export async function deleteProductVariant(formData: FormData): Promise<ActionSt
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const productId = formData.get("productId");
   const variantId = formData.get("variantId");
@@ -681,6 +695,7 @@ export async function duplicateProduct(formData: FormData): Promise<ActionState>
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const productId = formData.get("productId");
   const name = formData.get("name");
@@ -794,6 +809,7 @@ export async function addProductImage(formData: FormData): Promise<ActionState> 
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const productId = formData.get("productId");
   const file = formData.get("photo");
@@ -859,6 +875,7 @@ export async function deleteProductImage(formData: FormData): Promise<ActionStat
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const productId = formData.get("productId");
   const imageId = formData.get("imageId");
@@ -921,6 +938,7 @@ export async function reorderProductImages(formData: FormData): Promise<ActionSt
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const productId = formData.get("productId");
   const imageIds = formData.getAll("imageId") as string[];
@@ -983,6 +1001,7 @@ export async function reorderProducts(formData: FormData): Promise<ActionState> 
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const artistId = formData.get("artistId");
   const productIds = formData.getAll("productId") as string[];
@@ -1030,6 +1049,7 @@ export async function deleteProduct(formData: FormData): Promise<ActionState> {
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const productId = formData.get("productId");
   if (typeof productId !== "string") return { ok: false, error: "Missing product." };
@@ -1072,6 +1092,7 @@ export async function createFreebie(formData: FormData): Promise<ActionState> {
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const artistId = formData.get("artistId");
   const title = formData.get("title");
@@ -1150,6 +1171,7 @@ export async function updateFreebie(formData: FormData): Promise<ActionState> {
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const freebieId = formData.get("freebieId");
   const title = formData.get("title");
@@ -1220,6 +1242,7 @@ export async function deleteFreebie(formData: FormData): Promise<ActionState> {
   // restore a working session immediately.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  if (session.role === "restricted_admin") return { ok: false, error: CATALOGUE_FORBIDDEN };
 
   const freebieId = formData.get("freebieId");
   if (typeof freebieId !== "string") return { ok: false, error: "Missing freebie." };
@@ -1280,7 +1303,11 @@ export async function changePassword(formData: FormData): Promise<ActionState> {
   // updateUserById merges into the existing app_metadata rather than
   // replacing it (verified against this project's own Supabase Auth
   // before relying on it), so role/artist_id survive untouched.
-  if (session.role === "vendor" && session.mustChangePassword && updated.user) {
+  if (
+    (session.role === "vendor" || session.role === "restricted_admin") &&
+    session.mustChangePassword &&
+    updated.user
+  ) {
     const adminSupabase = createAdminClient();
     const { error: metadataError } = await adminSupabase.auth.admin.updateUserById(updated.user.id, {
       app_metadata: { must_change_password: false },

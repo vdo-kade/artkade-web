@@ -18,6 +18,12 @@ export async function recordOfflineSale(formData: FormData): Promise<ActionState
   // like a broken button.
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  // Vendor Mode decrements stock immediately (see below) -- it's a
+  // catalogue write, not order fulfilment, so restricted_admin (view +
+  // fulfil orders only, see lib/session-role.ts) doesn't get it either.
+  if (session.role === "restricted_admin") {
+    return { ok: false, error: "Your account can't log sales." };
+  }
 
   const artistId = formData.get("artistId");
   const productId = formData.get("productId");

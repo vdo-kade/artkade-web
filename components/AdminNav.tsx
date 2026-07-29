@@ -6,8 +6,13 @@ const linkStyle: React.CSSProperties = { color: "#333", textDecoration: "none" }
 // there's always a way back to Home/all-stalls without hitting the browser
 // back button. Vendors only see their own stall + Vendor Mode -- the
 // admin-only links below 403/redirect a vendor session anyway (see
-// middleware.ts), so there's no point showing them.
-export default function AdminNav({ role }: { role: "admin" | "vendor" }) {
+// middleware.ts), so there's no point showing them. restricted_admin sees
+// the same view links as admin (it can view every stall/order/dashboard --
+// see lib/session-role.ts) but not "Add vendor" or "Add restricted admin",
+// since it can't create either -- those routes reject it server-side
+// regardless (app/admin/vendors/create/route.ts,
+// app/admin/staff/create/route.ts), this just keeps a dead link off its nav.
+export default function AdminNav({ role }: { role: "admin" | "restricted_admin" | "vendor" }) {
   return (
     <nav
       style={{
@@ -27,7 +32,7 @@ export default function AdminNav({ role }: { role: "admin" | "vendor" }) {
       <Link href="/vendor" style={linkStyle}>
         Stall dashboard
       </Link>
-      {role === "admin" && (
+      {(role === "admin" || role === "restricted_admin") && (
         <>
           <Link href="/admin" style={linkStyle}>
             All stalls
@@ -41,8 +46,15 @@ export default function AdminNav({ role }: { role: "admin" | "vendor" }) {
           <Link href="/admin/beta-signups" style={linkStyle}>
             Beta signups
           </Link>
+        </>
+      )}
+      {role === "admin" && (
+        <>
           <Link href="/admin/vendors/new" style={linkStyle}>
             Add vendor
+          </Link>
+          <Link href="/admin/staff/new" style={linkStyle}>
+            Add restricted admin
           </Link>
         </>
       )}

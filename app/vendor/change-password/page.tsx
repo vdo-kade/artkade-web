@@ -19,7 +19,7 @@ export const revalidate = 0;
 export default async function VendorChangePasswordPage() {
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
-  if (session.role !== "vendor") redirect("/vendor");
+  if (session.role !== "vendor" && session.role !== "restricted_admin") redirect("/vendor");
 
   return (
     <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 420, margin: "60px auto" }}>
@@ -28,10 +28,14 @@ export default async function VendorChangePasswordPage() {
       </h1>
       <p style={{ fontSize: 13, color: "#666", marginBottom: 20 }}>
         {session.mustChangePassword
-          ? "You're signed in with the temporary password from when your stall account was created. Set a real one to continue to your dashboard."
+          ? "You're signed in with the temporary password from when your account was created. Set a real one to continue to your dashboard."
           : "Enter a new password below."}
       </p>
-      <PasswordChangeForm redirectOnSuccess={session.mustChangePassword ? "/vendor" : undefined} />
+      <PasswordChangeForm
+        redirectOnSuccess={
+          session.mustChangePassword ? (session.role === "vendor" ? "/vendor" : "/admin") : undefined
+        }
+      />
       <form action={logout} style={{ marginTop: 24 }}>
         <button
           type="submit"

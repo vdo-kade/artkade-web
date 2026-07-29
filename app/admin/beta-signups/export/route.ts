@@ -9,7 +9,7 @@ import { getSessionRole } from "@/lib/session-role";
 // app also does independently of the page-level gate.
 export async function GET() {
   const session = await getSessionRole();
-  if (session?.role !== "admin") {
+  if (session?.role !== "admin" && session?.role !== "restricted_admin") {
     return NextResponse.json({ error: "Not authorized." }, { status: 403 });
   }
 

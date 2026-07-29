@@ -40,6 +40,11 @@ function VendorModeError() {
 export default async function VendorModePage({ searchParams }: { searchParams: { artist?: string } }) {
   const session = await getSessionRole();
   if (!session) redirect("/admin/login");
+  // Vendor Mode logs in-person sales, which decrements stock (see
+  // ../mode-actions.ts) -- restricted_admin can view every dashboard and
+  // fulfil orders, but not write to the catalogue, so there's nothing for
+  // it to do here.
+  if (session.role === "restricted_admin") redirect("/admin");
 
   let supabase: ReturnType<typeof createAdminClient>;
   try {

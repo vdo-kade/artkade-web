@@ -194,6 +194,40 @@ function VendorDashboardError() {
   );
 }
 
+// Read-only stand-in for ProductEditCard below, for a viewer who can see
+// every stall's products but can't write to any of them (restricted_admin
+// -- see lib/session-role.ts). No form at all, not a disabled one: the
+// underlying updateProduct/deleteProduct/duplicateProduct actions already
+// reject this role server-side regardless, this is purely about not
+// showing controls that would just bounce back with an error.
+function ProductViewCard({ product }: { product: ProductRow }) {
+  return (
+    <>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <strong>{product.name}</strong>
+        <span style={{ fontSize: 12, color: "#666" }}>{product.sold_count} sold</span>
+      </div>
+      {product.description && <p style={{ fontSize: 13, color: "#666", margin: "6px 0" }}>{product.description}</p>}
+      <p style={{ fontSize: 12, color: "#666", margin: "6px 0" }}>
+        {CATEGORY_LABELS[product.category] ?? product.category} · {product.is_active ? "Active" : "Inactive"}
+        {product.is_bestseller ? " · Bestseller" : ""}
+        {product.is_one_off ? " · One of one" : ""}
+      </p>
+      <table style={{ fontSize: 13, marginTop: 8 }}>
+        <tbody>
+          {product.product_variants.map((v) => (
+            <tr key={v.id}>
+              <td style={{ paddingRight: 12 }}>{v.label}</td>
+              <td style={{ paddingRight: 12 }}>Rs. {v.price}</td>
+              <td>{v.stock} in stock</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
 // The Stock tab's per-product edit form, unchanged from before the
 // thumbnail-grid rewrite -- ProductStockGrid just decides when it's shown
 // instead of it always being expanded inline.
@@ -388,7 +422,7 @@ export default async function VendorDashboardPage({
   let stallList: Pick<ArtistRow, "id" | "slug" | "name">[] = [];
   let selectedArtistId: string;
 
-  if (session.role === "admin") {
+  if (session.role === "admin" || session.role === "restricted_admin") {
     const { data, error: stallListError } = await supabase
       .from("artists")
       .select("id, slug, name")
@@ -406,6 +440,13 @@ export default async function VendorDashboardPage({
   } else {
     selectedArtistId = session.artistId;
   }
+
+  // restricted_admin can view every stall/product (same read access as
+  // admin, see lib/session-role.ts) but every write in ./actions.ts
+  // rejects it outright -- this just controls whether this page renders
+  // the add/edit/delete forms at all, the actual authorization boundary is
+  // server-side and doesn't depend on this flag being right.
+  const canManageCatalogue = session.role !== "restricted_admin";
 
   const [artistResult, productsResult, freebiesResult] = await Promise.all([
     supabase
@@ -686,7 +727,7 @@ export default async function VendorDashboardPage({
         <h1 style={{ fontSize: 24 }}>{artist.name} — stall dashboard</h1>
         <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "#666" }}>
           {user?.email && <span>{user.email}</span>}
-          <Link href={`/vendor/mode?artist=${artist.slug}`}>Vendor Mode &rarr;</Link>
+          {canManageCatalogue && <Link href={`/vendor/mode?artist=${artist.slug}`}>Vendor Mode &rarr;</Link>}
           <form action={logout}>
             <button type="submit" style={{ padding: "4px 10px", fontSize: 13 }}>
               Log out
@@ -695,7 +736,7 @@ export default async function VendorDashboardPage({
         </div>
       </div>
 
-      {session.role === "admin" && stallList.length > 1 && (
+      {(session.role === "admin" || session.role === "restricted_admin") && stallList.length > 1 && (
         <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
           {stallList.map((s) => (
             <a
@@ -719,6 +760,20 @@ export default async function VendorDashboardPage({
 
       <DashboardTabs
         personal={
+          !canManageCatalogue ? (
+            <section style={card}>
+              <h2 style={{ fontSize: 18, marginBottom: 12 }}>Stall details</h2>
+              <p style={{ fontSize: 13, color: "#666", marginBottom: 12 }}>
+                Your account can view this stall but can't edit its details. Fulfil orders from the
+                Tracker tab instead.
+              </p>
+              <p style={{ fontSize: 13, marginBottom: 4 }}>
+                <strong>{artist.name}</strong>
+              </p>
+              {artist.tagline && <p style={{ fontSize: 13, color: "#666", marginBottom: 4 }}>{artist.tagline}</p>}
+              {artist.bio && <p style={{ fontSize: 13, color: "#666" }}>{artist.bio}</p>}
+            </section>
+          ) : (
           <>
       <section style={card}>
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>Stall details</h2>
@@ -821,9 +876,11 @@ export default async function VendorDashboardPage({
         </div>
       </section>
           </>
+          )
         }
         stock={
           <>
+      {canManageCatalogue && (
       <section style={card}>
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>Add a product</h2>
         <ActionForm action={createProduct}>
@@ -864,6 +921,7 @@ export default async function VendorDashboardPage({
           </button>
         </ActionForm>
       </section>
+      )}
 
       <section style={card}>
         <h2 style={{ fontSize: 18, marginBottom: 4 }}>Products &amp; stock</h2>
@@ -894,7 +952,11 @@ export default async function VendorDashboardPage({
                       imageUrl: product.image_url,
                       stockRemaining: productStockTotal(product.shared_stock_pool, product.product_variants),
                       isActive: product.is_active,
-                      editCard: <ProductEditCard product={product} />,
+                      editCard: canManageCatalogue ? (
+                        <ProductEditCard product={product} />
+                      ) : (
+                        <ProductViewCard product={product} />
+                      ),
                     })),
                 }))
                 .filter((section) => section.products.length > 0)}
@@ -932,6 +994,7 @@ export default async function VendorDashboardPage({
         }
         freebies={
           <>
+            {canManageCatalogue && (
             <section style={card}>
               <h2 style={{ fontSize: 18, marginBottom: 12 }}>Add a freebie</h2>
               <ActionForm action={createFreebie} successMessage="Freebie added." resetOnSuccess>
@@ -957,6 +1020,7 @@ export default async function VendorDashboardPage({
                 </button>
               </ActionForm>
             </section>
+            )}
 
             <section style={card}>
               <h2 style={{ fontSize: 18, marginBottom: 12 }}>Existing freebies</h2>
@@ -983,12 +1047,14 @@ export default async function VendorDashboardPage({
                       View file &rarr;
                     </a>
                   </p>
-                  <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "flex-start" }}>
-                    <FreebieEditToggle
-                      freebie={{ id: f.id, title: f.title, description: f.description, category: f.category }}
-                    />
-                    <DeleteFreebieButton freebieId={f.id} freebieTitle={f.title} />
-                  </div>
+                  {canManageCatalogue && (
+                    <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "flex-start" }}>
+                      <FreebieEditToggle
+                        freebie={{ id: f.id, title: f.title, description: f.description, category: f.category }}
+                      />
+                      <DeleteFreebieButton freebieId={f.id} freebieTitle={f.title} />
+                    </div>
+                  )}
                 </div>
               ))}
             </section>

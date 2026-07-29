@@ -13,8 +13,20 @@ export default function FreebieCard({ freebie }: { freebie: Freebie }) {
   const kind = previewKindForCategory(freebie.category);
   // Wallpapers ARE images, so if no separate thumbnail was uploaded the
   // file itself doubles as its own preview; every other category needs an
-  // explicit thumbnail_url or falls back to a plain label.
+  // explicit thumbnail_url or falls back to a plain label. Left pointing
+  // at the raw Storage URL (not the /api/freebie proxy below) -- next/image
+  // already fetches-once-and-caches this itself (see next.config.js's
+  // minimumCacheTTL), so routing it through the proxy too would be
+  // redundant, not an additional win.
   const previewImage = freebie.thumbnailUrl ?? (kind === "image" ? freebie.fileUrl : null);
+  // The actual file download/playback, unlike the preview above, has no
+  // next/image to fetch-once-and-cache it -- audio/PDF/generic downloads
+  // aren't images, and even the wallpaper category's own full-size
+  // download (as opposed to its preview) is a plain link, not an <Image>.
+  // Routed through this app's own proxy instead of the raw Storage URL so
+  // Vercel's edge can cache the repeat downloads a free giveaway
+  // naturally gets (see app/api/freebie/[id]/route.ts).
+  const downloadUrl = `/api/freebie/${freebie.id}`;
 
   return (
     <div className="bg-white border border-line p-3 pb-4">
@@ -46,12 +58,12 @@ export default function FreebieCard({ freebie }: { freebie: Freebie }) {
 
         {kind === "audio" && (
           // eslint-disable-next-line jsx-a11y/media-has-caption
-          <audio controls src={freebie.fileUrl} className="w-full mb-3" preload="none" />
+          <audio controls src={downloadUrl} className="w-full mb-3" preload="none" />
         )}
 
         {kind === "pdf" ? (
           <a
-            href={freebie.fileUrl}
+            href={downloadUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block bg-ink text-white px-4 py-2 text-xs font-medium tracking-wide hover:bg-accent transition-colors"
@@ -60,7 +72,7 @@ export default function FreebieCard({ freebie }: { freebie: Freebie }) {
           </a>
         ) : (
           <a
-            href={freebie.fileUrl}
+            href={downloadUrl}
             download
             target="_blank"
             rel="noopener noreferrer"

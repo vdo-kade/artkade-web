@@ -445,3 +445,38 @@ create policy "anyone can submit a beta signup" on beta_signups
 -- action entirely for the anon key. Only the service role key (which
 -- bypasses RLS) can read or update them -- that's what the admin
 -- dashboard's server-side code should use.
+
+-- ============================================================
+-- OPS: FREE-TIER USAGE MONITORING
+-- Backs scripts/check-usage.js and docs/free-tier-checklist.md. Database
+-- size isn't reachable through the normal Data API (PostgREST only
+-- exposes tables/views, not built-in functions like pg_database_size),
+-- so this small RPC wrapper is the one piece of that checklist that
+-- needs a real schema object rather than just a REST/Storage API call.
+--
+-- security invoker (not definer): pg_database_size() only needs the
+-- privilege to connect to the current database, which the caller
+-- (service_role, see the grant below) already has -- there's no reason
+-- to run this as a more-privileged role. Explicit search_path prevents
+-- the function from resolving pg_catalog names to something else if a
+-- malicious schema were ever added ahead of it.
+create or replace function public.get_db_stats()
+returns table (
+  database_size_bytes bigint,
+  public_table_count bigint
+)
+language sql
+security invoker
+set search_path = ''
+as $$
+  select
+    pg_catalog.pg_database_size(pg_catalog.current_database()),
+    (select count(*)::bigint from information_schema.tables where table_schema = 'public');
+$$;
+
+-- Postgres grants EXECUTE on every new function to PUBLIC by default,
+-- which cascades to anon/authenticated -- revoke first so this is
+-- service_role-only (database size isn't sensitive, but there's no
+-- reason to hand it to anonymous callers either).
+revoke all on function public.get_db_stats() from public;
+grant execute on function public.get_db_stats() to service_role;

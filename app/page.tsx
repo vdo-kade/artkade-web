@@ -38,7 +38,7 @@ const STEPS = [
   { n: 3, title: "Upload confirmation", body: "Attach your transfer screenshot at checkout." },
   { n: 4, title: "We review it", body: "A human checks your payment, usually same day." },
   { n: 5, title: "Confirmation email", body: "You'll get an email once it's approved." },
-  { n: 6, title: "Shipping", body: "Packed and sent within the week." },
+  { n: 6, title: "Shipping", body: "Free, packed by hand. Allow two weeks." },
 ];
 
 export default async function LandingPage() {
@@ -133,6 +133,9 @@ export default async function LandingPage() {
         >
           Browse the Stalls
         </a>
+        <p className="font-mono text-xs uppercase tracking-eyebrow text-warm-grey mt-4">
+          Shipping within Sri Lanka &middot; Free on everything
+        </p>
       </section>
 
       {/* FEATURED STALLS */}

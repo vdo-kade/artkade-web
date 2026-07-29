@@ -61,10 +61,11 @@ function wrapEmailHtml(bodyHtml: string): string {
 // status with no promised email and no copy to reuse, so it stays out of
 // scope here (see app/admin/orders/actions.ts).
 
-// Reuses the homepage's own "how it works" promise (app/page.tsx's STEPS:
-// "Confirmation email -- You'll get an email once it's approved" for step
-// 5, "Packed and sent within the week" for step 6) rather than inventing
-// new copy for what's already promised.
+// The unified shipping copy below (free / Friday cutoff / two weeks) is the
+// single source of truth for this promise now -- see app/page.tsx's STEPS,
+// app/checkout/page.tsx, components/ProductDetail.tsx, components/Footer.tsx
+// and app/faq/page.tsx, all of which say the same thing rather than each
+// describing shipping their own way.
 export async function sendOrderApprovedEmail(params: { to: string; orderNumber: string }): Promise<void> {
   const resend = getResendClient();
   if (!resend) {
@@ -81,20 +82,23 @@ export async function sendOrderApprovedEmail(params: { to: string; orderNumber: 
 
   const html = wrapEmailHtml(`
     <h1 style="font-size:22px; margin:0 0 16px; font-weight:600;">Your order is confirmed</h1>
-    <p style="margin:0 0 12px; line-height:1.5;">We've checked your payment for order <strong>${orderNumber}</strong> and it's approved.</p>
-    <p style="margin:0 0 12px; line-height:1.5;">Next up: we'll pack and post it within the week.</p>
+    <p style="margin:0 0 12px; line-height:1.5;">We've checked your payment for order <strong>${orderNumber}</strong> and it's approved. Thanks for ordering.</p>
+    <p style="margin:0 0 12px; line-height:1.5;">Here's what happens next. Your order joins this week's batch, which closes Friday at midnight. We pack over the weekend and post from Monday. Allow at least two weeks from today.</p>
+    <p style="margin:0 0 12px; line-height:1.5;">We're a small team of artists doing this ourselves, which is why it isn't instant. It also means your order gets checked by an actual person before it's sealed. If anything looks wrong when it arrives, reply to this email and we'll fix it.</p>
     <a href="${trackUrl}" style="display:inline-block; background:#1C1712; color:#FFFDF8; padding:10px 20px; text-decoration:none; font-size:14px; margin-top:8px;">Track your order &rarr;</a>
-    <p style="margin:24px 0 0; color:#8B8175; font-size:13px;">Thanks for shopping at Art Kade.</p>
+    <p style="margin:24px 0 0; color:#8B8175; font-size:13px;">You can check where your order is any time using your order number and this email address.</p>
   `);
   const text = `Your order is confirmed.
 
-We've checked your payment for order ${params.orderNumber} and it's approved.
+We've checked your payment for order ${params.orderNumber} and it's approved. Thanks for ordering.
 
-Next up: we'll pack and post it within the week.
+Here's what happens next. Your order joins this week's batch, which closes Friday at midnight. We pack over the weekend and post from Monday. Allow at least two weeks from today.
+
+We're a small team of artists doing this ourselves, which is why it isn't instant. It also means your order gets checked by an actual person before it's sealed. If anything looks wrong when it arrives, reply to this email and we'll fix it.
 
 Track your order: ${trackUrl}
 
-Thanks for shopping at Art Kade.`;
+You can check where your order is any time using your order number and this email address.`;
 
   const { error } = await resend.emails.send({
     from: FROM_EMAIL,

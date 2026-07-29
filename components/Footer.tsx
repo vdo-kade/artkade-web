@@ -142,11 +142,17 @@ export default function Footer() {
                 varshadilan@gmail.com
               </a>
             </li>
+            <li>
+              <a href="/faq" className="hover:text-accent">
+                Shipping &amp; FAQ
+              </a>
+            </li>
           </ul>
         </div>
       </div>
-      <div className="border-t border-line py-6 text-center text-xs text-warm-grey">
-        © {new Date().getFullYear()} Art Kade. All prints and stickers belong to their artists.
+      <div className="border-t border-line py-6 text-center text-xs text-warm-grey space-y-1">
+        <p>Free shipping on everything. Orders close Friday. Allow two weeks. Packed by hand by a small team of artists.</p>
+        <p>© {new Date().getFullYear()} Art Kade. All prints and stickers belong to their artists.</p>
       </div>
     </footer>
   );

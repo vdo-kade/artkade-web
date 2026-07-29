@@ -46,6 +46,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: SITE_URL, changeFrequency: "daily", priority: 1 },
     { url: `${SITE_URL}/magazine`, changeFrequency: "weekly", priority: 0.6 },
     { url: `${SITE_URL}/freebies`, changeFrequency: "weekly", priority: 0.5 },
+    { url: `${SITE_URL}/faq`, changeFrequency: "monthly", priority: 0.4 },
   ];
 
   const stallEntries: MetadataRoute.Sitemap = (stalls ?? []).map((stall) => ({

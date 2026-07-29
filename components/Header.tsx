@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: "/magazine", label: "Magazine" },
   { href: "/freebies", label: "Freebies" },
   { href: "/#drop", label: "Latest Drop" },
+  { href: "/faq", label: "FAQ" },
 ];
 
 export default function Header() {

@@ -69,6 +69,12 @@ export default function ProductDetail({ product }: { product: ProductDetailData 
             {isApparel && <SizeGuideButton customImageUrl={product.sizingChartUrl} />}
           </div>
 
+          <p className="mt-4 text-xs text-warm-grey">
+            <span className="font-medium text-ink">Free shipping on everything.</span> Orders
+            close Friday midnight. Allow at least two weeks for delivery. We pack every order
+            by hand over the weekend.
+          </p>
+
           {soldOut && (
             <p className="mt-3 font-mono text-xs uppercase text-warm-grey">
               {product.isOneOff ? "Sold, won't return" : "Sold out"}

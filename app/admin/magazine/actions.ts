@@ -114,6 +114,7 @@ export async function updatePost(formData: FormData): Promise<ActionState> {
   const category = formData.get("category");
   const artistId = formData.get("artistId");
   const published = formData.get("published") === "on";
+  const requestedFeatured = formData.get("isFeatured") === "on";
   const file = formData.get("hero");
   if (typeof id !== "string" || typeof title !== "string" || !title.trim()) {
     return { ok: false, error: "Title is required." };
@@ -138,6 +139,29 @@ export async function updatePost(formData: FormData): Promise<ActionState> {
   // published post (or toggling it back on later) doesn't reset its date.
   const publishedAt = published && !existing.published_at ? new Date().toISOString() : existing.published_at;
 
+  // Only a published post can be featured -- rather than rejecting the
+  // save if the checkbox and the published toggle disagree, unpublishing
+  // just silently drops the feature along with it. That's the "unpublish
+  // the featured post" case app/magazine/page.tsx's fallback-to-newest
+  // logic exists for, so it needs to actually happen here, not be blocked.
+  const isFeatured = published && requestedFeatured;
+
+  if (isFeatured) {
+    // Exactly one post can be featured at a time: clear every other row
+    // BEFORE setting this one, in this same action, so the UI never has to
+    // be trusted to enforce it (see supabase/schema.sql's partial unique
+    // index for the hard backstop if this ever gets skipped).
+    const { error: clearError } = await supabase
+      .from("magazine_posts")
+      .update({ is_featured: false })
+      .neq("id", id)
+      .eq("is_featured", true);
+    if (clearError) {
+      console.error("Failed to clear previous featured post:", clearError);
+      return { ok: false, error: "Something went wrong. Check server logs." };
+    }
+  }
+
   const { error } = await supabase
     .from("magazine_posts")
     .update({
@@ -148,6 +172,7 @@ export async function updatePost(formData: FormData): Promise<ActionState> {
       body: typeof body === "string" && body.trim() ? body.trim() : null,
       published,
       published_at: publishedAt,
+      is_featured: isFeatured,
       ...(heroUrl ? { hero_image_url: heroUrl } : {}),
     })
     .eq("id", id);

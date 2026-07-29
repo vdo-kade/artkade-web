@@ -11,6 +11,7 @@ type PostRow = {
   excerpt: string | null;
   category: string | null;
   hero_image_url: string | null;
+  is_featured: boolean;
 };
 
 function toMagazinePost(row: PostRow): MagazinePost {
@@ -27,12 +28,21 @@ export default async function MagazinePage() {
   const supabase = await createClient();
   const { data: posts } = await supabase
     .from("magazine_posts")
-    .select("slug, title, excerpt, category, hero_image_url")
+    .select("slug, title, excerpt, category, hero_image_url, is_featured")
     .eq("published", true)
     .order("published_at", { ascending: false })
     .returns<PostRow[]>();
 
-  const [latest, ...rest] = posts ?? [];
+  const allPosts = posts ?? [];
+  // A manually featured post always wins the hero slot. If none is marked
+  // -- nothing's ever been set, or the featured one got deleted or
+  // unpublished (is_featured only ever lives on a published row, see
+  // app/admin/magazine/actions.ts's updatePost) -- this falls back to the
+  // newest post, exactly the behavior this feature replaced.
+  const featuredIndex = allPosts.findIndex((p) => p.is_featured);
+  const latestIndex = featuredIndex >= 0 ? featuredIndex : 0;
+  const latest = allPosts[latestIndex];
+  const rest = allPosts.filter((_, i) => i !== latestIndex);
 
   return (
     <>

@@ -21,6 +21,7 @@ type PostRow = {
   artist_id: string | null;
   published: boolean;
   published_at: string | null;
+  is_featured: boolean;
 };
 
 const inputStyle: React.CSSProperties = {
@@ -71,7 +72,7 @@ export default async function AdminMagazinePage() {
   const [postsResult, artistsResult] = await Promise.all([
     supabase
       .from("magazine_posts")
-      .select("id, slug, title, excerpt, body, category, hero_image_url, artist_id, published, published_at")
+      .select("id, slug, title, excerpt, body, category, hero_image_url, artist_id, published, published_at, is_featured")
       .order("created_at", { ascending: false })
       .returns<PostRow[]>(),
     supabase.from("artists").select("id, name").order("sort_order"),
@@ -143,8 +144,13 @@ export default async function AdminMagazinePage() {
               <input type="hidden" name="id" value={post.id} />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <strong>{post.title}</strong>
-                <span style={{ fontSize: 12, color: post.published ? "green" : "#999" }}>
-                  {post.published ? "Published" : "Draft"}
+                <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {post.is_featured && (
+                    <span style={{ fontSize: 12, color: "#a06a00", fontWeight: "bold" }}>FEATURED</span>
+                  )}
+                  <span style={{ fontSize: 12, color: post.published ? "green" : "#999" }}>
+                    {post.published ? "Published" : "Draft"}
+                  </span>
                 </span>
               </div>
 
@@ -180,6 +186,11 @@ export default async function AdminMagazinePage() {
               <input style={{ marginBottom: 12, fontSize: 12 }} type="file" name="hero" accept="image/*" />
               <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
                 <input type="checkbox" name="published" defaultChecked={post.published} /> Published
+              </label>
+              <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
+                <input type="checkbox" name="isFeatured" defaultChecked={post.is_featured} /> Featured
+                (shows in the magazine hero/"Latest release" slot -- only one post can be featured at a
+                time, and it must be published)
               </label>
               <button type="submit" style={{ padding: "6px 14px" }}>
                 Save changes

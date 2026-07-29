@@ -276,8 +276,16 @@ create table magazine_posts (
   artist_id uuid references artists(id),
   published boolean not null default false,
   published_at timestamptz,
+  is_featured boolean not null default false, -- drives the magazine hero/"Latest Release" slot -- see the partial unique index below and app/admin/magazine/actions.ts's setFeaturedPost
   created_at timestamptz not null default now()
 );
+
+-- Business-rule constraint, not a performance index: at most one row can
+-- ever have is_featured = true. app/admin/magazine/actions.ts's
+-- setFeaturedPost already clears every other row before setting this one,
+-- so this is a backstop against a future code path forgetting to, not the
+-- primary enforcement.
+create unique index magazine_posts_one_featured_idx on magazine_posts (is_featured) where is_featured;
 
 -- ============================================================
 -- INDEXES

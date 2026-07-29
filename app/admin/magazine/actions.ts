@@ -49,13 +49,18 @@ export async function createPost(formData: FormData): Promise<ActionState> {
   const body = formData.get("body");
   const category = formData.get("category");
   const artistId = formData.get("artistId");
+  const slugOverride = formData.get("slug");
   const published = formData.get("published") === "on";
   const file = formData.get("hero");
   if (typeof title !== "string" || !title.trim()) return { ok: false, error: "Title is required." };
 
   const supabase = createAdminClient();
 
-  const baseSlug = slugify(title);
+  // Defaults to the title, same as before -- but SEO-driven slugs (e.g.
+  // targeting a search term the title itself doesn't contain) need to be
+  // settable independently of it, so an explicit non-blank slug field wins.
+  const baseSlug =
+    typeof slugOverride === "string" && slugOverride.trim() ? slugify(slugOverride) : slugify(title);
   let slug = baseSlug;
   for (let attempt = 2; ; attempt++) {
     const { data: existing } = await supabase.from("magazine_posts").select("id").eq("slug", slug).maybeSingle();

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Header from "@/components/Header";
@@ -16,20 +17,78 @@ type PostRow = {
   published_at: string | null;
 };
 
-export default async function MagazinePostPage({ params }: { params: { slug: string } }) {
+async function getPost(slug: string): Promise<PostRow | null> {
   const supabase = await createClient();
   const { data: post } = await supabase
     .from("magazine_posts")
     .select("title, excerpt, body, category, hero_image_url, published_at")
-    .eq("slug", params.slug)
+    .eq("slug", slug)
     .eq("published", true)
     .maybeSingle<PostRow>();
+  return post;
+}
 
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const post = await getPost(params.slug);
+  if (!post) return {};
+  return {
+    title: `${post.title} — Art Kade Magazine`,
+    description: post.excerpt ?? undefined,
+  };
+}
+
+// A very small markdown subset -- just enough for what magazine posts
+// actually use (see supabase/schema.sql's `body text, -- markdown`
+// comment, which this used to not honor at all): "## " headings and
+// [text](url) links. Deliberately not a full markdown library -- the only
+// two block/inline forms editorial copy here has ever needed are these,
+// and every link a post carries is a real outbound backlink (press
+// coverage, an artist's own site/socials), so rendering [text](url) as an
+// actual <a> rather than literal bracket text is the whole point of this
+// function, not a nice-to-have.
+function renderInline(text: string, keyPrefix: string) {
+  const linkPattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  const nodes: (string | JSX.Element)[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let i = 0;
+  while ((match = linkPattern.exec(text))) {
+    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+    nodes.push(
+      <a
+        key={`${keyPrefix}-link-${i++}`}
+        href={match[2]}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-accent underline"
+      >
+        {match[1]}
+      </a>
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes;
+}
+
+function renderBody(body: string) {
+  const blocks = body.split(/\n\s*\n/).filter((b) => b.trim());
+  return blocks.map((block, i) => {
+    const trimmed = block.trim();
+    if (trimmed.startsWith("## ")) {
+      return (
+        <h2 key={i} className="font-display text-2xl mt-10 mb-3 text-ink">
+          {renderInline(trimmed.slice(3).trim(), `h2-${i}`)}
+        </h2>
+      );
+    }
+    return <p key={i}>{renderInline(trimmed, `p-${i}`)}</p>;
+  });
+}
+
+export default async function MagazinePostPage({ params }: { params: { slug: string } }) {
+  const post = await getPost(params.slug);
   if (!post) return notFound();
-
-  // No markdown renderer in this app -- rendered as plain paragraphs
-  // (split on blank lines), not real markdown syntax.
-  const paragraphs = (post.body ?? "").split(/\n\s*\n/).filter((p) => p.trim());
 
   return (
     <>
@@ -62,10 +121,8 @@ export default async function MagazinePostPage({ params }: { params: { slug: str
         )}
 
         <div className="space-y-5 text-warm-grey">
-          {paragraphs.length === 0 && post.excerpt && <p>{post.excerpt}</p>}
-          {paragraphs.map((p, i) => (
-            <p key={i}>{p}</p>
-          ))}
+          {!post.body && post.excerpt && <p>{post.excerpt}</p>}
+          {post.body && renderBody(post.body)}
         </div>
       </article>
       <Footer />

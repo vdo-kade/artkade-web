@@ -100,9 +100,16 @@ export default async function AdminMagazinePage() {
           <ActionForm action={createPost} resetOnSuccess>
             <label style={{ fontSize: 12, color: "#666" }}>Title</label>
             <input style={inputStyle} name="title" required />
+            <label style={{ fontSize: 12, color: "#666" }}>
+              Slug (optional -- leave blank to generate from the title)
+            </label>
+            <input style={inputStyle} name="slug" placeholder="e.g. nuwan-shilpa-psychedelic-visionary-art" />
             <label style={{ fontSize: 12, color: "#666" }}>Excerpt</label>
             <textarea style={{ ...inputStyle, minHeight: 60 }} name="excerpt" />
-            <label style={{ fontSize: 12, color: "#666" }}>Body</label>
+            <label style={{ fontSize: 12, color: "#666" }}>
+              Body (plain paragraphs, blank line between each -- "## " starts a heading,
+              [text](url) renders as a real link)
+            </label>
             <textarea style={{ ...inputStyle, minHeight: 140 }} name="body" />
             <label style={{ fontSize: 12, color: "#666" }}>Category</label>
             <input style={inputStyle} name="category" placeholder="e.g. Interview" />

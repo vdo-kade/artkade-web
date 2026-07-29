@@ -7,14 +7,13 @@ import Footer from "@/components/Footer";
 import { useBag, bagItemKey } from "@/components/BagProvider";
 import { createClient } from "@/lib/supabase";
 import { BULK_ORDER_WHATSAPP_URL, BULK_ORDER_PHONE_DISPLAY } from "@/lib/contact";
+import { MIN_ORDER_TOTAL, minimumOrderProgressText } from "@/lib/checkout";
 import { placeOrder } from "./actions";
 
 function generateOrderNumber(): string {
   const n = Math.floor(100000 + Math.random() * 900000);
   return `ARTK-${n}`;
 }
-
-const MIN_ORDER_TOTAL = 1350;
 
 type BankDetails = {
   bank_name: string;
@@ -99,6 +98,7 @@ export default function CheckoutPage() {
 
   const amountUnderMinimum = MIN_ORDER_TOTAL - totalAmount;
   const belowMinimum = items.length > 0 && amountUnderMinimum > 0;
+  const progressText = minimumOrderProgressText(totalAmount);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -319,11 +319,8 @@ export default function CheckoutPage() {
                   Rs. {totalAmount.toLocaleString("en-US")}
                 </span>
               </div>
-              {belowMinimum && (
-                <p className="text-sm text-red-600 mt-2">
-                  Minimum order is Rs. {MIN_ORDER_TOTAL.toLocaleString("en-US")}. Add Rs.{" "}
-                  {amountUnderMinimum.toLocaleString("en-US")} more to continue.
-                </p>
+              {progressText && (
+                <p className="text-sm text-warm-grey mt-2">{progressText}</p>
               )}
             </div>
 

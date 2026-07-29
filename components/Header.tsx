@@ -7,6 +7,7 @@ import Image from "next/image";
 import { useBag } from "./BagProvider";
 import SearchForm from "./SearchForm";
 import { SHORT_LOGO_URL, LOGO_SHADOW_FILTER } from "@/lib/brand";
+import { minimumOrderProgressText } from "@/lib/checkout";
 
 const NAV_LINKS = [
   { href: "/#stalls", label: "The Stalls" },
@@ -17,8 +18,13 @@ const NAV_LINKS = [
 ];
 
 export default function Header() {
-  const { totalItems } = useBag();
+  const { totalItems, totalAmount } = useBag();
   const [menuOpen, setMenuOpen] = useState(false);
+  // Sitewide, quiet nudge toward the minimum -- visible from the moment
+  // the bag has anything in it, not just at the checkout gate (see
+  // lib/checkout.ts). Only ever reflects the bag; never blocks anything
+  // itself, that's still checkout's own server-enforced gate.
+  const progressText = totalItems > 0 ? minimumOrderProgressText(totalAmount) : null;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -95,6 +101,12 @@ export default function Header() {
           </button>
         </div>
       </div>
+
+      {progressText && (
+        <div className="border-t border-line px-6 py-1.5 text-center">
+          <p className="font-mono text-[11px] text-warm-grey">{progressText}</p>
+        </div>
+      )}
 
       {menuOpen &&
         // Portalled to document.body: the header has backdrop-blur, and

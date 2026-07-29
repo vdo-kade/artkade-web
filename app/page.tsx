@@ -7,6 +7,7 @@ import StickerWheel, { WheelImage } from "@/components/StickerWheel";
 import { createClient } from "@/lib/supabase-server";
 import { PRODUCT_SELECT, mapProduct, mapStall } from "@/lib/catalogue";
 import { LOGO_URL, LOGO_SHADOW_FILTER } from "@/lib/brand";
+import { MIN_ORDER_TOTAL } from "@/lib/checkout";
 
 export const revalidate = 0;
 
@@ -33,7 +34,11 @@ function interleaveFairly<T>(lists: T[][], limit: number): T[] {
 }
 
 const STEPS = [
-  { n: 1, title: "Fill your bag", body: "Pick prints, stickers and merch from any stall." },
+  {
+    n: 1,
+    title: "Fill your bag",
+    body: `Pick prints, stickers and merch from any stall. Rs. ${MIN_ORDER_TOTAL.toLocaleString("en-US")} minimum order.`,
+  },
   { n: 2, title: "Choose payment", body: "Bank transfer for now. More methods soon." },
   { n: 3, title: "Upload confirmation", body: "Attach your transfer screenshot at checkout." },
   { n: 4, title: "We review it", body: "A human checks your payment, usually same day." },

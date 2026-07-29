@@ -1,6 +1,7 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { BULK_ORDER_WHATSAPP_URL, BULK_ORDER_PHONE_DISPLAY } from "@/lib/contact";
+import { MIN_ORDER_TOTAL } from "@/lib/checkout";
 
 export const metadata = {
   title: "FAQ — Art Kade",
@@ -11,8 +12,8 @@ const FAQS = [
     q: "Is shipping really free?",
     a: (
       <>
-        Yes, on everything, anywhere in Sri Lanka. No minimum, no fine print. The only
-        exception is bulk orders over one kilogram, where we work out the rate with you
+        Yes, on everything, anywhere in Sri Lanka. No shipping charge at any order size. The
+        only exception is bulk orders over one kilogram, where we work out the rate with you
         directly. Message us on{" "}
         <a
           href={BULK_ORDER_WHATSAPP_URL}
@@ -25,6 +26,10 @@ const FAQS = [
         and we&apos;ll handle it.
       </>
     ),
+  },
+  {
+    q: "Is there a minimum order?",
+    a: `Yes, Rs. ${MIN_ORDER_TOTAL.toLocaleString("en-US")}. Since shipping is on us and everything is packed and posted by hand, a single small order costs us more to send than it's worth. The minimum keeps free shipping viable. Most orders clear it with two or three stickers, or any single print.`,
   },
   {
     q: "When do orders close?",

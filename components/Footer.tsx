@@ -5,6 +5,7 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase";
 import { LOGO_URL, LOGO_SHADOW_FILTER } from "@/lib/brand";
 import { sortSocialsForDisplay } from "@/lib/socials";
+import { SUPPORT_CONTACTS } from "@/lib/contact";
 import SocialIcon from "./SocialIcon";
 
 type SocialLink = { label: string; url: string };
@@ -121,33 +122,35 @@ export default function Footer() {
         {/* Separate from the artist social blocks above -- this is Art
             Kade's own customer-facing contact, not a per-stall channel, so
             it doesn't live inside "Follow along" or get gated by any
-            artist's show_socials_in_footer flag. */}
+            artist's show_socials_in_footer flag. Varsha's number here is
+            the same one used as the WhatsApp bulk-order contact elsewhere
+            on the site (checkout, FAQ) -- kept in the same +94 format as
+            those so it never shows up twice in two different formats. */}
         <div>
           <p className="font-medium mb-3 tracking-eyebrow uppercase text-xs text-warm-grey">
             Customer support
           </p>
-          <ul className="space-y-2">
-            <li>
-              <a
-                href="https://wa.me/94773891111"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-accent"
-              >
-                WhatsApp: 077 389 1111
-              </a>
-            </li>
-            <li>
-              <a href="mailto:varshadilan@gmail.com" className="hover:text-accent">
-                varshadilan@gmail.com
-              </a>
-            </li>
-            <li>
-              <a href="/faq" className="hover:text-accent">
-                Shipping &amp; FAQ
-              </a>
-            </li>
-          </ul>
+          <div className="space-y-4">
+            {SUPPORT_CONTACTS.map((contact) => (
+              <div key={contact.name}>
+                <p className="text-xs text-warm-grey mb-1">{contact.name}</p>
+                <a href={`mailto:${contact.email}`} className="block hover:text-accent">
+                  {contact.email}
+                </a>
+                <a
+                  href={`https://wa.me/${contact.whatsapp}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block hover:text-accent"
+                >
+                  {contact.phone}
+                </a>
+              </div>
+            ))}
+          </div>
+          <a href="/faq" className="block mt-4 hover:text-accent">
+            Shipping &amp; FAQ
+          </a>
         </div>
       </div>
       <div className="border-t border-line py-6 text-center text-xs text-warm-grey space-y-1">

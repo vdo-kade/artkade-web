@@ -1,5 +1,6 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { BULK_ORDER_WHATSAPP_URL, BULK_ORDER_PHONE_DISPLAY } from "@/lib/contact";
 
 export const metadata = {
   title: "FAQ — Art Kade",
@@ -14,12 +15,12 @@ const FAQS = [
         exception is bulk orders over one kilogram, where we work out the rate with you
         directly. Message us on{" "}
         <a
-          href="https://wa.me/94773891111"
+          href={BULK_ORDER_WHATSAPP_URL}
           className="text-accent underline"
           target="_blank"
           rel="noopener noreferrer"
         >
-          WhatsApp at 077 389 1111
+          WhatsApp at {BULK_ORDER_PHONE_DISPLAY}
         </a>{" "}
         and we&apos;ll handle it.
       </>
@@ -44,12 +45,12 @@ const FAQS = [
         Sometimes. If you need something sooner, or you&apos;re ordering in bulk, message us
         on{" "}
         <a
-          href="https://wa.me/94773891111"
+          href={BULK_ORDER_WHATSAPP_URL}
           className="text-accent underline"
           target="_blank"
           rel="noopener noreferrer"
         >
-          WhatsApp at 077 389 1111
+          WhatsApp at {BULK_ORDER_PHONE_DISPLAY}
         </a>
         . We can usually arrange a faster method if you&apos;re happy to cover the difference.
       </>

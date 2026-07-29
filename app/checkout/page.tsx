@@ -6,6 +6,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useBag, bagItemKey } from "@/components/BagProvider";
 import { createClient } from "@/lib/supabase";
+import { BULK_ORDER_WHATSAPP_URL, BULK_ORDER_PHONE_DISPLAY } from "@/lib/contact";
 import { placeOrder } from "./actions";
 
 function generateOrderNumber(): string {
@@ -186,8 +187,8 @@ export default function CheckoutPage() {
           {isBulk ? (
             <p className="text-warm-grey mb-8 border border-line bg-white p-4 text-left">
               Ordering more than a kilo&apos;s worth? Message us on WhatsApp at{" "}
-              <a href="https://wa.me/94773891111" className="text-accent underline" target="_blank" rel="noopener noreferrer">
-                077 389 1111
+              <a href={BULK_ORDER_WHATSAPP_URL} className="text-accent underline" target="_blank" rel="noopener noreferrer">
+                {BULK_ORDER_PHONE_DISPLAY}
               </a>{" "}
               and we&apos;ll sort out the shipping with you directly.
             </p>
@@ -248,12 +249,12 @@ export default function CheckoutPage() {
             <p>
               Ordering more than a kilo&apos;s worth? Message us on{" "}
               <a
-                href="https://wa.me/94773891111"
+                href={BULK_ORDER_WHATSAPP_URL}
                 className="text-accent underline"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                WhatsApp at 077 389 1111
+                WhatsApp at {BULK_ORDER_PHONE_DISPLAY}
               </a>{" "}
               and we&apos;ll sort out the shipping with you directly.
             </p>

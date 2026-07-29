@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import Image from "@/components/SelfHealingImage";
 import { getRecentlyViewed, type ViewedProduct } from "@/lib/recentlyViewed";
 
 // Real view history (see lib/recentlyViewed.ts), not "each stall's latest

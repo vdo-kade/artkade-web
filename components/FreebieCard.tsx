@@ -1,4 +1,4 @@
-import Image from "next/image";
+import Image from "@/components/SelfHealingImage";
 import { FREEBIE_CATEGORY_LABELS, previewKindForCategory, type Freebie } from "@/lib/freebies";
 
 // No bag/checkout involvement at all here, unlike ProductCard -- every

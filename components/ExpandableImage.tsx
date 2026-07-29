@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image";
+import Image from "@/components/SelfHealingImage";
 import Link from "next/link";
 
 export type ExpandableImageItem = { src: string; alt: string };

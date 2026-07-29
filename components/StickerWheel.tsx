@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
+import Image from "@/components/SelfHealingImage";
 import Link from "next/link";
 
 export type WheelImage = {

@@ -47,7 +47,18 @@ export type Product = {
   variants?: ProductVariant[];
 };
 
-export default function ProductCard({ product }: { product: Product }) {
+// How many cards at the start of a grid get an eager-loaded, priority
+// image instead of the library default (lazy). Sized for a narrow
+// (mobile) viewport, where cards stack to one column and the first ones
+// are immediately visible -- not for the wide desktop grid, which fits
+// more per row but isn't what iOS Safari visitors (most of this site's
+// traffic) actually see above the fold. Every call site that renders a
+// grid of these (stall pages, homepage, search) should mark only the
+// first PRIORITY_CARD_COUNT cards priority and leave the rest lazy, or
+// this undoes the work already done to keep Cached Egress under quota.
+export const PRIORITY_CARD_COUNT = 3;
+
+export default function ProductCard({ product, priority = false }: { product: Product; priority?: boolean }) {
   const soldOut = product.stockRemaining !== undefined && product.stockRemaining <= 0;
 
   // A single-variant limited-run product (the common case -- most prints
@@ -105,6 +116,7 @@ export default function ProductCard({ product }: { product: Product }) {
         placeholder={<span className="text-warm-grey text-xs font-mono">photo coming soon</span>}
         linkHref={`/stalls/${product.stallSlug}/products/${product.slug}`}
         linkScroll={false}
+        priority={priority}
       />
 
       <div className="pt-3 px-1">

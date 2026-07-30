@@ -42,7 +42,14 @@ export default function Header() {
     // viewportFit: "cover") while pushing the actual logo/nav/hamburger
     // content down clear of the notch -- the padding, not the header's
     // position, is what "fits" it to the screen.
-    <header className="sticky top-0 z-40 bg-cream/90 backdrop-blur border-b border-line pt-[env(safe-area-inset-top)]">
+    //
+    // Solid bg-cream (no blur) below md: a `sticky` element with
+    // backdrop-filter forces iOS Safari to recomposite the blur against
+    // scrolling content on every frame -- a well-documented source of
+    // scroll jank, and the one most mobile visitors actually hit. The
+    // blur only earns its keep at md: and up, where trackpad/wheel
+    // scrolling doesn't pay that same per-frame cost.
+    <header className="sticky top-0 z-40 bg-cream md:bg-cream/90 md:backdrop-blur border-b border-line pt-[env(safe-area-inset-top)]">
       <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3" onClick={() => setMenuOpen(false)}>
           {/*
@@ -109,12 +116,16 @@ export default function Header() {
       )}
 
       {menuOpen &&
-        // Portalled to document.body: the header has backdrop-blur, and
-        // backdrop-filter (like transform/filter) makes its box the
-        // containing block for `position: fixed` descendants -- without the
-        // portal this "fullscreen" backdrop would only span the header's
-        // own bounding box instead of the viewport, so taps further down
-        // the page wouldn't reach it at all.
+        // Portalled to document.body rather than rendered in place. This
+        // div only ever shows below md: (md:hidden), where the header no
+        // longer carries backdrop-blur (see the header's own className
+        // comment) -- but keep the portal regardless: backdrop-filter
+        // (like transform/filter) makes its box the containing block for
+        // `position: fixed` descendants, and at md: and up the header's
+        // blur comes back while this same portalled node still exists in
+        // the tree (just hidden via CSS). Without the portal, a future
+        // tweak to that breakpoint could silently break taps outside the
+        // header at the exact width where the blur returns.
         createPortal(
           <div
             className="md:hidden fixed inset-0 z-30 bg-ink/20"

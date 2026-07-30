@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import ProductCard, { Product } from "@/components/ProductCard";
+import ProductCard, { Product, PRIORITY_CARD_COUNT } from "@/components/ProductCard";
 import Countdown from "@/components/Countdown";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase-server";
@@ -81,16 +81,25 @@ export default async function StallPage({ params }: { params: { slug: string } }
       </section>
 
       <div className="mx-auto max-w-6xl px-6 py-14">
-        {sections.map((section) => (
-          <div key={section.title} className="mb-14">
-            <h2 className="font-display text-2xl mb-6">{section.title}</h2>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 items-start overflow-x-hidden">
-              {section.products.map((p) => (
-                <ProductCard key={p.id} product={p} />
-              ))}
+        {(() => {
+          // Priority images are budgeted across the whole page, not
+          // per-section -- a stall whose first category only has one or
+          // two products would otherwise leave the second section's
+          // opening cards (still right under the fold) lazy-loaded.
+          let priorityRemaining = PRIORITY_CARD_COUNT;
+          return sections.map((section) => (
+            <div key={section.title} className="mb-14">
+              <h2 className="font-display text-2xl mb-6">{section.title}</h2>
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 items-start overflow-x-hidden">
+                {section.products.map((p) => {
+                  const priority = priorityRemaining > 0;
+                  if (priority) priorityRemaining--;
+                  return <ProductCard key={p.id} product={p} priority={priority} />;
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          ));
+        })()}
       </div>
 
       <Footer />

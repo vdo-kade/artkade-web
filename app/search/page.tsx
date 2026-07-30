@@ -2,7 +2,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SearchForm from "@/components/SearchForm";
 import StallCard, { Stall } from "@/components/StallCard";
-import ProductCard, { Product } from "@/components/ProductCard";
+import ProductCard, { Product, PRIORITY_CARD_COUNT } from "@/components/ProductCard";
 import { createClient } from "@/lib/supabase-server";
 import { PRODUCT_SELECT, mapProduct, mapStall } from "@/lib/catalogue";
 
@@ -79,8 +79,8 @@ export default async function SearchPage({ searchParams }: { searchParams: { q?:
           <div>
             <h2 className="font-display text-2xl mb-6">Products</h2>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 items-start overflow-x-hidden">
-              {products.map((p) => (
-                <ProductCard key={p.id} product={p} />
+              {products.map((p, i) => (
+                <ProductCard key={p.id} product={p} priority={i < PRIORITY_CARD_COUNT} />
               ))}
             </div>
           </div>

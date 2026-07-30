@@ -38,6 +38,7 @@ export default function ExpandableImage({
   sizes = "(min-width: 1024px) 260px, (min-width: 640px) 45vw, 90vw",
   linkHref,
   linkScroll = true,
+  priority,
 }: {
   images: ExpandableImageItem[];
   className?: string;
@@ -50,6 +51,12 @@ export default function ExpandableImage({
   // (see ProductDetail.tsx, which never passes this).
   linkHref?: string;
   linkScroll?: boolean;
+  // Forwarded to next/image's `priority` -- eager-loads and preloads this
+  // thumbnail instead of the library default (lazy). Only the first few
+  // cards in a grid should ever set this (see ProductCard's PRIORITY_CARD_COUNT);
+  // leaving the rest lazy is what keeps a long stall page from fetching
+  // every image up front and driving Cached Egress further over quota.
+  priority?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
@@ -115,6 +122,7 @@ export default function ExpandableImage({
               width={1200}
               height={1500}
               sizes={sizes}
+              priority={priority}
               className={`block w-full h-auto ${className ?? ""}`}
             />
           </Link>
@@ -131,6 +139,7 @@ export default function ExpandableImage({
               width={1200}
               height={1500}
               sizes={sizes}
+              priority={priority}
               className={`block w-full h-auto ${className ?? ""}`}
             />
           </button>

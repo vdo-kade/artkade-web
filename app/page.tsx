@@ -2,7 +2,7 @@ import Image from "next/image";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import StallCard, { Stall } from "@/components/StallCard";
-import ProductCard, { Product } from "@/components/ProductCard";
+import ProductCard, { Product, PRIORITY_CARD_COUNT } from "@/components/ProductCard";
 import StickerWheel, { WheelImage } from "@/components/StickerWheel";
 import { createClient } from "@/lib/supabase-server";
 import { PRODUCT_SELECT, mapProduct, mapStall } from "@/lib/catalogue";
@@ -163,8 +163,8 @@ export default async function LandingPage() {
         </p>
         <h2 className="font-display text-3xl md:text-4xl mb-10">From the current drop</h2>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 items-start overflow-x-hidden">
-          {FEATURED_PRODUCTS.map((p) => (
-            <ProductCard key={p.id} product={p} />
+          {FEATURED_PRODUCTS.map((p, i) => (
+            <ProductCard key={p.id} product={p} priority={i < PRIORITY_CARD_COUNT} />
           ))}
         </div>
       </section>

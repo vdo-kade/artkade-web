@@ -45,11 +45,21 @@ export default async function StallPage({ params }: { params: { slug: string } }
         className="relative overflow-hidden border-b border-line py-16 px-6 text-center"
         style={{ backgroundColor: `${artist.accent_color}12` }}
       >
+        {/* A CSS background-image here previously bypassed next/image
+            entirely -- no WebP/AVIF conversion, no responsive srcset, no
+            Vercel edge caching, so every stall page view re-fetched the
+            full raw file straight from Supabase Storage. It's also the
+            page's LCP element, so priority matters as much as the format
+            savings do. */}
         {artist.hero_image_url && (
           <>
-            <div
-              className="absolute inset-0 bg-cover bg-center"
-              style={{ backgroundImage: `url(${artist.hero_image_url})` }}
+            <Image
+              src={artist.hero_image_url}
+              alt=""
+              fill
+              priority
+              sizes="100vw"
+              className="object-cover"
             />
             <div className="absolute inset-0 bg-black/40" />
           </>

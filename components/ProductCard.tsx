@@ -44,6 +44,12 @@ export type Product = {
   // is just the card-level aggregate that a single-variant EditionBadge
   // can't represent once a product has more than one size.
   exclusiveDropStock?: { remaining: number; total: number };
+  // Set only when the vendor's "open edition" toggle is on AND nothing about
+  // this product would already show a Limited badge (no edition_size set
+  // anywhere on it) -- see lib/catalogue.ts's mapProduct. Renders as a plain
+  // "X in stock" line instead of the "Only N left" low-stock hint, with no
+  // total/edition framing at all.
+  openStock?: number;
   variants?: ProductVariant[];
 };
 
@@ -139,7 +145,9 @@ export default function ProductCard({ product, priority = false }: { product: Pr
             <span className="font-mono text-xs uppercase text-warm-grey">
               {product.isOneOff || hasEditionMarker ? "Sold, won't return" : "Sold out"}
             </span>
-          ) : product.isOneOff || hasEditionMarker ? null : product.stockRemaining !== undefined && product.stockRemaining <= 10 ? (
+          ) : product.isOneOff || hasEditionMarker ? null : product.openStock !== undefined ? (
+            <span className="font-mono text-xs text-accent">{product.openStock} in stock</span>
+          ) : product.stockRemaining !== undefined && product.stockRemaining <= 10 ? (
             <span className="font-mono text-xs text-accent">
               Only {product.stockRemaining} left
             </span>

@@ -413,11 +413,15 @@ const MAX_PRODUCT_VARIANTS = 10;
 // Nullable per-variant edition size: an empty/blank field means "not a
 // limited run" (null), same convention as the sizing-chart/stock fields
 // around it -- never trust the raw string as a number without this check,
-// Number("") is 0, not "unset".
+// Number("") is 0, not "unset". A submitted 0 is normalized to null too --
+// it's never a legitimate original run size (a badge reading "10 of 0
+// left" is nonsense, see lib/catalogue.ts's normalizeEditionSize), so this
+// stops new rows from ever being saved with that same bad value, on top of
+// the read-side normalization that already covers existing rows.
 function parseEditionSize(raw: FormDataEntryValue | null): number | null {
   if (typeof raw !== "string" || raw.trim() === "") return null;
   const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
 }
 
 export async function updateProduct(formData: FormData): Promise<ActionState> {
@@ -437,7 +441,13 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   const isActive = formData.get("isActive") === "on";
   const isOneOff = formData.get("isOneOff") === "on";
   const isExclusiveDrop = formData.get("isExclusiveDrop") === "on";
+  const isOpenEdition = formData.get("isOpenEdition") === "on";
   const isBestseller = formData.get("isBestseller") === "on";
+  // The vendor-facing toggle (see ProductVariantManager), not the product's
+  // existing DB value -- write/read behaviour below follows whichever mode
+  // was actually submitted, so a mode switch on this same save takes effect
+  // immediately rather than lagging a save behind.
+  const newSharedStockPool = formData.get("sharedStockPool") === "on";
   const dropEndsAtRaw = formData.get("dropEndsAt");
   const sizingChartFile = formData.get("sizingChartPhoto");
   const removeSizingChart = formData.get("removeSizingChart") === "on";
@@ -454,14 +464,13 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   // artistId for a vendor.
   let ownerQuery = supabase
     .from("products")
-    .select("id, shared_stock_pool, artists(slug)")
+    .select("id, artists(slug)")
     .eq("id", productId);
   if (session.role === "vendor") {
     ownerQuery = ownerQuery.eq("artist_id", session.artistId);
   }
   const { data: existing } = await ownerQuery.maybeSingle<{
     id: string;
-    shared_stock_pool: boolean;
     artists: { slug: string } | null;
   }>();
   if (!existing || !existing.artists) return { ok: false, error: "Product not found." };
@@ -495,7 +504,9 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
       is_active: isActive,
       is_one_off: isOneOff,
       is_exclusive_drop: isExclusiveDrop,
+      is_open_edition: isOpenEdition,
       is_bestseller: isBestseller,
+      shared_stock_pool: newSharedStockPool,
       drop_ends_at: dropEndsAt,
       ...(sizingChartUrl !== undefined ? { sizing_chart_url: sizingChartUrl } : {}),
     })
@@ -511,10 +522,10 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   // restoreStock rely on to move the whole pool together. Same idea for
   // edition_size: a shared pool has one countdown, not five independent
   // ones, so it gets one combined field too (sharedEditionSize).
-  const sharedStockValue = existing.shared_stock_pool
+  const sharedStockValue = newSharedStockPool
     ? Math.max(0, Math.floor(Number(formData.get("sharedStock")) || 0))
     : null;
-  const sharedEditionSize = existing.shared_stock_pool
+  const sharedEditionSize = newSharedStockPool
     ? parseEditionSize(formData.get("sharedEditionSize"))
     : null;
 
@@ -542,7 +553,7 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
       const label = formData.get(`variantLabel-${variantId}`);
       const stock = sharedStockValue ?? Number(formData.get(`variantStock-${variantId}`));
       const price = Number(formData.get(`variantPrice-${variantId}`));
-      const editionSize = existing.shared_stock_pool
+      const editionSize = newSharedStockPool
         ? sharedEditionSize
         : parseEditionSize(formData.get(`variantEditionSize-${variantId}`));
       if (typeof label !== "string" || !label.trim()) return null;
@@ -579,7 +590,7 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
       const label = formData.get(`variantLabel-${tempId}`);
       const stock = sharedStockValue ?? Number(formData.get(`variantStock-${tempId}`));
       const price = Number(formData.get(`variantPrice-${tempId}`));
-      const editionSize = existing.shared_stock_pool
+      const editionSize = newSharedStockPool
         ? sharedEditionSize
         : parseEditionSize(formData.get(`variantEditionSize-${tempId}`));
       if (typeof label !== "string" || !label.trim()) return null;
@@ -706,7 +717,7 @@ export async function duplicateProduct(formData: FormData): Promise<ActionState>
   let ownerQuery = supabase
     .from("products")
     .select(
-      "id, artist_id, category, is_bestseller, is_one_off, is_exclusive_drop, shared_stock_pool, artists(slug), product_variants(label, price, edition_size)"
+      "id, artist_id, category, is_bestseller, is_one_off, is_exclusive_drop, is_open_edition, shared_stock_pool, artists(slug), product_variants(label, price, edition_size)"
     )
     .eq("id", productId);
   if (session.role === "vendor") {
@@ -719,6 +730,7 @@ export async function duplicateProduct(formData: FormData): Promise<ActionState>
     is_bestseller: boolean;
     is_one_off: boolean;
     is_exclusive_drop: boolean;
+    is_open_edition: boolean;
     shared_stock_pool: boolean;
     artists: { slug: string } | null;
     product_variants: { label: string; price: number; edition_size: number | null }[];
@@ -754,6 +766,7 @@ export async function duplicateProduct(formData: FormData): Promise<ActionState>
       is_bestseller: source.is_bestseller,
       is_one_off: source.is_one_off,
       is_exclusive_drop: source.is_exclusive_drop,
+      is_open_edition: source.is_open_edition,
       shared_stock_pool: source.shared_stock_pool,
       sort_order: nextSortOrder,
       // Starts hidden -- it has no photos yet (explicitly not copied) and

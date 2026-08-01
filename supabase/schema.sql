@@ -104,6 +104,14 @@ create table products (
   -- computeEditionAggregate. Purely a display concept; doesn't affect
   -- stock/edition_size tracking itself.
   is_exclusive_drop boolean not null default false,
+  -- Third edition-display mode alongside a real edition_size ("limited",
+  -- unaffected by this flag) and plain unset ("none", the default here).
+  -- Only ever consulted for a product/variant that has no edition_size set
+  -- -- lib/catalogue.ts's mapProduct/getProductDetail show remaining stock
+  -- as "X in stock" instead of nothing when this is true. A real
+  -- edition_size always wins and shows the Limited badge regardless of this
+  -- flag's value.
+  is_open_edition boolean not null default false,
   created_at timestamptz not null default now()
 );
 

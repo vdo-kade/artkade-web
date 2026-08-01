@@ -109,24 +109,44 @@ export default function ProductDetail({ product }: { product: ProductDetailData 
                   <span className="text-xs text-warm-grey">across all sizes</span>
                 </p>
               )}
+              {/* Open-edition sibling of the block above: same one-line-for-
+                  the-whole-pool treatment, but no total to show against. */}
+              {!product.sharedStock && product.openStock !== undefined && (
+                <p className="mb-2 flex items-center gap-2">
+                  <span className="bg-accent text-white text-[10px] font-mono uppercase tracking-wide px-2 py-1 whitespace-nowrap">
+                    {product.openStock > 0 ? `${product.openStock} in stock` : "Sold out"}
+                  </span>
+                  <span className="text-xs text-warm-grey">across all sizes</span>
+                </p>
+              )}
               <ul className="text-sm">
-                {product.variants.map((v) => (
-                  <li
-                    key={v.id}
-                    className="flex justify-between items-center gap-3 border-b border-line/60 py-1.5"
-                  >
-                    <span>{v.label}</span>
-                    <span className="flex items-center gap-2">
-                      <span className="font-mono text-warm-grey">
-                        Rs. {v.price.toLocaleString("en-US")}
-                        {!product.sharedStock && v.editionSize == null && v.stock <= 0 ? " · sold out" : ""}
+                {product.variants.map((v) => {
+                  const showCombined = !!product.sharedStock || product.openStock !== undefined;
+                  return (
+                    <li
+                      key={v.id}
+                      className="flex justify-between items-center gap-3 border-b border-line/60 py-1.5"
+                    >
+                      <span>{v.label}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="font-mono text-warm-grey">
+                          Rs. {v.price.toLocaleString("en-US")}
+                          {!showCombined && v.editionSize == null && !product.isOpenEdition && v.stock <= 0
+                            ? " · sold out"
+                            : ""}
+                        </span>
+                        {!showCombined && v.editionSize != null && (
+                          <EditionBadge stock={v.stock} editionSize={v.editionSize} />
+                        )}
+                        {!showCombined && v.editionSize == null && product.isOpenEdition && (
+                          <span className="font-mono text-xs text-accent">
+                            {v.stock > 0 ? `${v.stock} in stock` : "Sold out"}
+                          </span>
+                        )}
                       </span>
-                      {!product.sharedStock && v.editionSize != null && (
-                        <EditionBadge stock={v.stock} editionSize={v.editionSize} />
-                      )}
-                    </span>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

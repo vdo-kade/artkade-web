@@ -78,6 +78,7 @@ type ProductRow = {
   sizing_chart_url: string | null;
   shared_stock_pool: boolean;
   is_exclusive_drop: boolean;
+  is_open_edition: boolean;
   product_variants: VariantRow[];
   product_images: ProductImageRow[];
 };
@@ -321,6 +322,14 @@ function ProductEditCard({ product }: { product: ProductRow }) {
           <input type="checkbox" name="isExclusiveDrop" defaultChecked={product.is_exclusive_drop} /> Exclusive
           drop (shows collective stock on the product card)
         </label>
+        {/* Only ever consulted for a size/pool that has no edition_size set
+            -- a real edition_size always wins and shows the Limited "X of N
+            left" badge instead (see lib/catalogue.ts's mapProduct). */}
+        <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
+          <input type="checkbox" name="isOpenEdition" defaultChecked={product.is_open_edition} /> Open edition
+          (show remaining stock as "X in stock" instead of no badge, for any size with no edition size set
+          below)
+        </label>
 
         <label style={{ fontSize: 12, color: "#666" }}>
           Drop countdown ends at (shown as a timer on the card/detail page; leave blank for none)
@@ -332,35 +341,9 @@ function ProductEditCard({ product }: { product: ProductRow }) {
           defaultValue={toDatetimeLocal(product.drop_ends_at)}
         />
 
-        {product.shared_stock_pool && (
-          <div style={{ border: "1px solid #eee", borderRadius: 4, padding: 8, marginBottom: 8 }}>
-            <label style={{ fontSize: 12, color: "#666" }}>
-              Shared stock pool (one number split across every size below)
-            </label>
-            <input
-              type="number"
-              min={0}
-              name="sharedStock"
-              defaultValue={product.product_variants[0]?.stock ?? 0}
-              style={{ width: 100, padding: 4, boxSizing: "border-box", display: "block", marginTop: 4 }}
-            />
-            <label style={{ fontSize: 12, color: "#666", display: "block", marginTop: 8 }}>
-              Shared edition size (one countdown for the whole pool; leave blank for none)
-            </label>
-            <input
-              type="number"
-              min={0}
-              name="sharedEditionSize"
-              defaultValue={product.product_variants[0]?.edition_size ?? ""}
-              placeholder="none"
-              style={{ width: 100, padding: 4, boxSizing: "border-box", display: "block", marginTop: 4 }}
-            />
-          </div>
-        )}
-
         <ProductVariantManager
           productId={product.id}
-          sharedStockPool={product.shared_stock_pool}
+          initialSharedStockPool={product.shared_stock_pool}
           isOneOff={product.is_one_off}
           variants={sortVariantsByPrice(product.product_variants).map((v) => ({
             id: v.id,
@@ -459,7 +442,7 @@ export default async function VendorDashboardPage({
     supabase
       .from("products")
       .select(
-        "id, category, name, description, image_url, is_active, is_one_off, is_bestseller, drop_ends_at, sold_count, sizing_chart_url, shared_stock_pool, is_exclusive_drop, product_variants(id, label, price, stock, edition_size), product_images(id, url, sort_order)"
+        "id, category, name, description, image_url, is_active, is_one_off, is_bestseller, drop_ends_at, sold_count, sizing_chart_url, shared_stock_pool, is_exclusive_drop, is_open_edition, product_variants(id, label, price, stock, edition_size), product_images(id, url, sort_order)"
       )
       .eq("artist_id", selectedArtistId)
       .order("sort_order")

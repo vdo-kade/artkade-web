@@ -4,6 +4,22 @@ import { createClient } from "./supabase-server";
 
 type VariantRow = { id: string; label: string; price: number; stock: number; edition_size: number | null };
 
+// A handful of rows predate edition_size being a real "leave blank for
+// unset" convention and got 0 written instead of null (e.g. a form that
+// once defaulted a blank number input to 0) -- 0 is never a legitimate
+// original run size, so every read site treats it identically to null
+// rather than rendering nonsense like "10 of 0 left". Applied once here,
+// as early as possible after the DB read, so every downstream consumer
+// (aggregates, card, detail page) only ever sees a real edition_size or
+// null, never a stray 0.
+function normalizeEditionSize(n: number | null): number | null {
+  return n != null && n > 0 ? n : null;
+}
+
+function normalizeVariants<T extends { edition_size: number | null }>(variants: T[]): T[] {
+  return variants.map((v) => ({ ...v, edition_size: normalizeEditionSize(v.edition_size) }));
+}
+
 type ProductRow = {
   id: string;
   artist_id: string;
@@ -18,6 +34,13 @@ type ProductRow = {
   drop_ends_at: string | null;
   shared_stock_pool: boolean;
   is_exclusive_drop: boolean;
+  // Vendor toggle for the "open edition" display mode -- see mapProduct's
+  // openStock and ProductCard/ProductDetail's rendering. Only ever consulted
+  // when a product/variant has no edition_size (real edition_size always
+  // wins and shows the Limited "X of N left" badge instead) -- this just
+  // decides what an UNSET edition_size renders as: remaining stock with no
+  // total ("open"), or nothing at all ("none", the pre-existing default).
+  is_open_edition: boolean;
   product_variants: VariantRow[];
 };
 
@@ -40,7 +63,7 @@ export type ArtistWithProducts = ArtistRow & {
 // Shared select fragment so the landing page's flat product list and the
 // stall page's nested `artists.products` query stay in sync.
 export const PRODUCT_SELECT =
-  "id, artist_id, name, slug, category, image_url, is_bestseller, is_one_off, sold_count, sort_order, drop_ends_at, shared_stock_pool, is_exclusive_drop, product_variants(id, label, price, stock, edition_size)";
+  "id, artist_id, name, slug, category, image_url, is_bestseller, is_one_off, sold_count, sort_order, drop_ends_at, shared_stock_pool, is_exclusive_drop, is_open_edition, product_variants(id, label, price, stock, edition_size)";
 
 // Collective "N of M left" across every variant of a product -- the
 // aggregate the card badge (is_exclusive_drop) and the shared-pool stock
@@ -140,8 +163,17 @@ export function sortVariantsByPrice<T extends { label: string; price: number }>(
 // filter), so a single shared embed shape can't cleanly serve all three
 // call sites. Each caller supplies the slug it already has in scope.
 export function mapProduct(row: ProductRow, stallSlug: string): Product {
-  const variants = sortVariantsByPrice(row.product_variants);
+  const variants = normalizeVariants(sortVariantsByPrice(row.product_variants));
   const editionAggregate = computeEditionAggregate(row.shared_stock_pool, variants);
+  // editionAggregate is undefined exactly when no variant on this product has
+  // a real edition_size -- the same precondition the card's own single-
+  // variant Limited badge checks (see ProductCard's editionVariant). Open
+  // mode only ever fills in for a product that would otherwise show nothing
+  // at all, never overriding a real Limited badge.
+  const openStock =
+    row.is_open_edition && editionAggregate === undefined
+      ? productStockTotal(row.shared_stock_pool, variants)
+      : undefined;
   return {
     id: row.id,
     artistId: row.artist_id,
@@ -158,6 +190,7 @@ export function mapProduct(row: ProductRow, stallSlug: string): Product {
     soldCount: row.sold_count,
     dropEndsAt: row.drop_ends_at ?? undefined,
     exclusiveDropStock: row.is_exclusive_drop ? editionAggregate : undefined,
+    openStock,
     variants: variants.map((v) => ({
       id: v.id,
       label: v.label,
@@ -265,6 +298,15 @@ export type ProductDetail = {
   // ProductDetail shows it once above the size list rather than repeating
   // it as a per-row EditionBadge (see computeEditionAggregate).
   sharedStock?: { remaining: number; total: number };
+  // Shared-pool sibling of sharedStock for the Open mode: set when the pool
+  // has no edition_size (so sharedStock is undefined) and the vendor's open
+  // edition toggle is on -- one combined "X in stock" line instead of a
+  // per-row one, same reasoning as sharedStock itself.
+  openStock?: number;
+  // Per-variant products (prints) decide Open vs None row-by-row in
+  // ProductDetail itself, since each row can independently have its own
+  // edition_size -- this is just the raw toggle value for that check.
+  isOpenEdition: boolean;
 };
 
 type ProductDetailRow = {
@@ -279,13 +321,14 @@ type ProductDetailRow = {
   drop_ends_at: string | null;
   sizing_chart_url: string | null;
   shared_stock_pool: boolean;
+  is_open_edition: boolean;
   product_variants: VariantRow[];
   product_images: { url: string; sort_order: number }[];
   artists: { slug: string; name: string; is_active: boolean } | null;
 };
 
 const PRODUCT_DETAIL_SELECT =
-  "id, name, slug, description, category, image_url, is_one_off, sold_count, drop_ends_at, sizing_chart_url, shared_stock_pool, product_variants(id, label, price, stock, edition_size), product_images(url, sort_order), artists(slug, name, is_active)";
+  "id, name, slug, description, category, image_url, is_one_off, sold_count, drop_ends_at, sizing_chart_url, shared_stock_pool, is_open_edition, product_variants(id, label, price, stock, edition_size), product_images(url, sort_order), artists(slug, name, is_active)";
 
 // Shared by both the real product page (app/stalls/[slug]/products/
 // [productSlug]/page.tsx) and its intercepted-route modal counterpart --
@@ -312,7 +355,12 @@ export async function getProductDetail(
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((img) => ({ src: img.url, alt: data.name }));
 
-  const variants = sortVariantsByPrice(data.product_variants);
+  const variants = normalizeVariants(sortVariantsByPrice(data.product_variants));
+  const sharedStock = data.shared_stock_pool ? computeEditionAggregate(data.shared_stock_pool, variants) : undefined;
+  const openStock =
+    data.shared_stock_pool && !sharedStock && data.is_open_edition
+      ? productStockTotal(data.shared_stock_pool, variants)
+      : undefined;
 
   return {
     id: data.id,
@@ -334,6 +382,8 @@ export async function getProductDetail(
     })),
     stallName: data.artists.name,
     stallSlug: data.artists.slug,
-    sharedStock: data.shared_stock_pool ? computeEditionAggregate(data.shared_stock_pool, variants) : undefined,
+    sharedStock,
+    openStock,
+    isOpenEdition: data.is_open_edition,
   };
 }

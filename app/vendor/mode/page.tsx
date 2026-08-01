@@ -2,15 +2,15 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getSessionRole } from "@/lib/session-role";
-import { productStockTotal, sortVariantsByPrice } from "@/lib/catalogue";
-import { recordOfflineSale } from "../mode-actions";
+import { CATEGORY_LABELS, productStockTotal, resolveCategoryOrder, sortVariantsByPrice } from "@/lib/catalogue";
 import EndOfDayPanel from "./EndOfDayPanel";
+import VendorModeCatalogue, { type CatalogueSection, type SoldTodayEntry } from "./VendorModeCatalogue";
 import AdminNav from "@/components/AdminNav";
-import { ActionForm } from "@/components/ActionForm";
 
 export const revalidate = 0;
 
-type ArtistRow = { id: string; slug: string; name: string };
+type ArtistRow = { id: string; slug: string; name: string; category_order: string[] | null };
+type StallListRow = { id: string; slug: string; name: string };
 type VariantRow = { id: string; label: string; price: number; stock: number };
 type ProductRow = {
   id: string;
@@ -21,19 +21,14 @@ type ProductRow = {
 };
 type SaleRow = {
   id: string;
+  product_id: string;
+  variant_id: string;
   quantity: number;
   unit_price: number;
   notes: string | null;
   sold_at: string;
   products: { name: string } | null;
   product_variants: { label: string } | null;
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid #ccc",
-  borderRadius: 6,
-  padding: 16,
-  marginBottom: 16,
 };
 
 function VendorModeError() {
@@ -61,7 +56,7 @@ export default async function VendorModePage({ searchParams }: { searchParams: {
     return <VendorModeError />;
   }
 
-  let stallList: ArtistRow[] = [];
+  let stallList: StallListRow[] = [];
   let selectedArtistId: string;
 
   if (session.role === "admin") {
@@ -80,7 +75,11 @@ export default async function VendorModePage({ searchParams }: { searchParams: {
   startOfToday.setHours(0, 0, 0, 0);
 
   const [artistResult, productsResult, todaySalesResult] = await Promise.all([
-    supabase.from("artists").select("id, slug, name").eq("id", selectedArtistId).maybeSingle<ArtistRow>(),
+    supabase
+      .from("artists")
+      .select("id, slug, name, category_order")
+      .eq("id", selectedArtistId)
+      .maybeSingle<ArtistRow>(),
     supabase
       .from("products")
       .select("id, name, category, shared_stock_pool, product_variants(id, label, price, stock)")
@@ -90,7 +89,7 @@ export default async function VendorModePage({ searchParams }: { searchParams: {
       .returns<ProductRow[]>(),
     supabase
       .from("offline_sales")
-      .select("id, quantity, unit_price, notes, sold_at, products(name), product_variants(label)")
+      .select("id, product_id, variant_id, quantity, unit_price, notes, sold_at, products(name), product_variants(label)")
       .eq("artist_id", selectedArtistId)
       .gte("sold_at", startOfToday.toISOString())
       .order("sold_at", { ascending: false })
@@ -112,6 +111,66 @@ export default async function VendorModePage({ searchParams }: { searchParams: {
   const products = productsResult.data ?? [];
   const todaySales = todaySalesResult.data ?? [];
   const todayTotal = todaySales.reduce((sum, s) => sum + s.quantity * s.unit_price, 0);
+
+  // Same category grouping the Stock tab uses (app/vendor/page.tsx) --
+  // resolveCategoryOrder respects this stall's own saved order and appends
+  // any category it hasn't arranged yet, rather than a category silently
+  // vanishing off this list too.
+  const presentCategoryOrder = resolveCategoryOrder(
+    artist.category_order,
+    Array.from(new Set(products.map((p) => p.category)))
+  );
+  const sections: CatalogueSection[] = presentCategoryOrder.map((cat) => ({
+    category: cat,
+    label: CATEGORY_LABELS[cat] ?? cat,
+    products: products
+      .filter((p) => p.category === cat)
+      .map((product) => {
+        const variants = sortVariantsByPrice(product.product_variants);
+        // Shared-pool products (t-shirts) keep every sibling variant's
+        // stock numerically identical (see lib/stock.ts) -- repeating that
+        // same number on every size row reads as "each size has this
+        // much," backwards for one pool split across sizes. Computed once
+        // here, same aggregate the card/detail page already use.
+        const poolStock = product.shared_stock_pool ? productStockTotal(true, variants) : null;
+        return { id: product.id, name: product.name, poolStock, variants };
+      }),
+  }));
+
+  // Quick re-sell list pinned at the top: the distinct variants already
+  // sold today (most recent first, since todaySales is already ordered
+  // that way), each pointing at its live product/variant/poolStock so a
+  // repeat sale at the same event doesn't need scrolling into its category
+  // to find it again. Looked up against `sections` (not the sales rows
+  // themselves) so the displayed stock is always the current live number,
+  // not whatever it was at the moment of that earlier sale.
+  const variantLookup = new Map<
+    string,
+    { productId: string; productName: string; poolStock: number | null; variant: VariantRow }
+  >();
+  for (const section of sections) {
+    for (const product of section.products) {
+      for (const variant of product.variants) {
+        variantLookup.set(variant.id, {
+          productId: product.id,
+          productName: product.name,
+          poolStock: product.poolStock,
+          variant,
+        });
+      }
+    }
+  }
+  const seenVariantIds = new Set<string>();
+  const soldToday: SoldTodayEntry[] = [];
+  for (const sale of todaySales) {
+    if (seenVariantIds.has(sale.variant_id)) continue;
+    seenVariantIds.add(sale.variant_id);
+    const match = variantLookup.get(sale.variant_id);
+    // Skip a variant that's since gone inactive/deleted -- can't log a
+    // repeat sale against something no longer sellable, and its row would
+    // have nothing live to show anyway.
+    if (match) soldToday.push(match);
+  }
 
   return (
     <>
@@ -148,58 +207,7 @@ export default async function VendorModePage({ searchParams }: { searchParams: {
         </div>
       )}
 
-      <section style={card}>
-        <h2 style={{ fontSize: 18, marginBottom: 12 }}>Log a sale</h2>
-        {products.length === 0 && <p style={{ fontSize: 13, color: "#999" }}>No active products.</p>}
-        {products.map((product) => {
-          const variants = sortVariantsByPrice(product.product_variants);
-          // Shared-pool products (t-shirts) keep every sibling variant's
-          // stock numerically identical (see lib/stock.ts) -- repeating
-          // that same number on every size row reads as "each size has
-          // this much," which is exactly backwards when it's one pool
-          // split across sizes. Shown once for the whole product instead,
-          // same aggregate lib/catalogue.ts's mapProduct/getProductDetail
-          // already use for the card and detail page.
-          const poolStock = product.shared_stock_pool ? productStockTotal(true, variants) : null;
-          return (
-            <div key={product.id} style={{ borderTop: "1px solid #eee", paddingTop: 10, marginTop: 10 }}>
-              <strong>{product.name}</strong>
-              {poolStock != null && (
-                <span style={{ fontSize: 13, color: "#666", marginLeft: 8 }}>
-                  {poolStock} in stock across all sizes
-                </span>
-              )}
-              {variants.map((v) => (
-                <ActionForm
-                  action={recordOfflineSale}
-                  successMessage="Logged."
-                  resetOnSuccess
-                  key={v.id}
-                  style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}
-                >
-                  <input type="hidden" name="artistId" value={artist.id} />
-                  <input type="hidden" name="productId" value={product.id} />
-                  <input type="hidden" name="variantId" value={v.id} />
-                  <span style={{ fontSize: 13, flex: "1 1 160px" }}>
-                    {v.label} — Rs. {v.price.toLocaleString("en-US")}
-                    {poolStock == null ? ` — ${v.stock} in stock` : ""}
-                  </span>
-                  <input type="number" name="quantity" defaultValue={1} min={1} style={{ width: 56, padding: 4 }} />
-                  <input
-                    type="text"
-                    name="notes"
-                    placeholder="Note (optional)"
-                    style={{ width: 140, padding: 4, fontSize: 12 }}
-                  />
-                  <button type="submit" style={{ padding: "4px 10px", fontSize: 13 }} disabled={v.stock <= 0}>
-                    {v.stock <= 0 ? "Sold out" : "Sold"}
-                  </button>
-                </ActionForm>
-              ))}
-            </div>
-          );
-        })}
-      </section>
+      <VendorModeCatalogue artistId={artist.id} sections={sections} soldToday={soldToday} />
 
       <EndOfDayPanel sales={todaySales} total={todayTotal} />
       </div>

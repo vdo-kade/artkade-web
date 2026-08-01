@@ -88,7 +88,8 @@ type CollaboratorProductRow = {
   artist_id: string;
   name: string;
   category: string;
-  product_variants: { label: string; stock: number }[];
+  shared_stock_pool: boolean;
+  product_variants: { label: string; price: number; stock: number }[];
 };
 type CollaboratorOrderRow = { id: string; order_items: { product_id: string }[] };
 type CollaboratorStall = {
@@ -644,7 +645,7 @@ export default async function VendorDashboardPage({
         supabase.from("artists").select("id, slug, name, tagline").in("id", targetIds),
         supabase
           .from("products")
-          .select("id, artist_id, name, category, product_variants(label, stock)")
+          .select("id, artist_id, name, category, shared_stock_pool, product_variants(label, price, stock)")
           .in("artist_id", targetIds)
           .returns<CollaboratorProductRow[]>(),
         supabase.from("orders").select("id, order_items(product_id)").eq("status", "awaiting_review").returns<CollaboratorOrderRow[]>(),
@@ -958,19 +959,32 @@ export default async function VendorDashboardPage({
             {stall.pendingOrders} pending order{stall.pendingOrders === 1 ? "" : "s"}
           </p>
           {stall.products.length === 0 && <p style={{ fontSize: 13, color: "#999" }}>No products yet.</p>}
-          {stall.products.map((product) => (
-            <div key={product.id} style={{ borderTop: "1px solid #eee", paddingTop: 8, marginTop: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>{product.name}</span>
-                <span style={{ fontSize: 12, color: "#666" }}>{product.category}</span>
+          {stall.products.map((product) => {
+            const variants = sortVariantsByPrice(product.product_variants);
+            // Same shared-pool aggregate as the Stock tab's own products
+            // above (productStockTotal) -- a shared-pool product keeps
+            // every sibling variant's stock numerically identical, so
+            // repeating that one number on every size row here read as
+            // "each size has this much," same bug Vendor Mode had.
+            const poolStock = product.shared_stock_pool ? productStockTotal(true, variants) : null;
+            return (
+              <div key={product.id} style={{ borderTop: "1px solid #eee", paddingTop: 8, marginTop: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>{product.name}</span>
+                  <span style={{ fontSize: 12, color: "#666" }}>{product.category}</span>
+                </div>
+                {poolStock != null ? (
+                  <p style={{ fontSize: 12, color: "#666", margin: "2px 0" }}>{poolStock} in stock across all sizes</p>
+                ) : (
+                  variants.map((v, i) => (
+                    <p key={i} style={{ fontSize: 12, color: "#666", margin: "2px 0" }}>
+                      {v.label}: {v.stock} in stock
+                    </p>
+                  ))
+                )}
               </div>
-              {product.product_variants.map((v, i) => (
-                <p key={i} style={{ fontSize: 12, color: "#666", margin: "2px 0" }}>
-                  {v.label}: {v.stock} in stock
-                </p>
-              ))}
-            </div>
-          ))}
+            );
+          })}
         </section>
       ))}
           </>

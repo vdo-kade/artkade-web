@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { getSessionRole } from "@/lib/session-role";
+import { productStockTotal, sortVariantsByPrice } from "@/lib/catalogue";
 import { recordOfflineSale } from "../mode-actions";
 import EndOfDayPanel from "./EndOfDayPanel";
 import AdminNav from "@/components/AdminNav";
@@ -11,7 +12,13 @@ export const revalidate = 0;
 
 type ArtistRow = { id: string; slug: string; name: string };
 type VariantRow = { id: string; label: string; price: number; stock: number };
-type ProductRow = { id: string; name: string; category: string; product_variants: VariantRow[] };
+type ProductRow = {
+  id: string;
+  name: string;
+  category: string;
+  shared_stock_pool: boolean;
+  product_variants: VariantRow[];
+};
 type SaleRow = {
   id: string;
   quantity: number;
@@ -76,7 +83,7 @@ export default async function VendorModePage({ searchParams }: { searchParams: {
     supabase.from("artists").select("id, slug, name").eq("id", selectedArtistId).maybeSingle<ArtistRow>(),
     supabase
       .from("products")
-      .select("id, name, category, product_variants(id, label, price, stock)")
+      .select("id, name, category, shared_stock_pool, product_variants(id, label, price, stock)")
       .eq("artist_id", selectedArtistId)
       .eq("is_active", true)
       .order("sort_order")
@@ -144,37 +151,54 @@ export default async function VendorModePage({ searchParams }: { searchParams: {
       <section style={card}>
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>Log a sale</h2>
         {products.length === 0 && <p style={{ fontSize: 13, color: "#999" }}>No active products.</p>}
-        {products.map((product) => (
-          <div key={product.id} style={{ borderTop: "1px solid #eee", paddingTop: 10, marginTop: 10 }}>
-            <strong>{product.name}</strong>
-            {product.product_variants.map((v) => (
-              <ActionForm
-                action={recordOfflineSale}
-                successMessage="Logged."
-                resetOnSuccess
-                key={v.id}
-                style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}
-              >
-                <input type="hidden" name="artistId" value={artist.id} />
-                <input type="hidden" name="productId" value={product.id} />
-                <input type="hidden" name="variantId" value={v.id} />
-                <span style={{ fontSize: 13, flex: "1 1 160px" }}>
-                  {v.label} — Rs. {v.price.toLocaleString("en-US")} — {v.stock} in stock
+        {products.map((product) => {
+          const variants = sortVariantsByPrice(product.product_variants);
+          // Shared-pool products (t-shirts) keep every sibling variant's
+          // stock numerically identical (see lib/stock.ts) -- repeating
+          // that same number on every size row reads as "each size has
+          // this much," which is exactly backwards when it's one pool
+          // split across sizes. Shown once for the whole product instead,
+          // same aggregate lib/catalogue.ts's mapProduct/getProductDetail
+          // already use for the card and detail page.
+          const poolStock = product.shared_stock_pool ? productStockTotal(true, variants) : null;
+          return (
+            <div key={product.id} style={{ borderTop: "1px solid #eee", paddingTop: 10, marginTop: 10 }}>
+              <strong>{product.name}</strong>
+              {poolStock != null && (
+                <span style={{ fontSize: 13, color: "#666", marginLeft: 8 }}>
+                  {poolStock} in stock across all sizes
                 </span>
-                <input type="number" name="quantity" defaultValue={1} min={1} style={{ width: 56, padding: 4 }} />
-                <input
-                  type="text"
-                  name="notes"
-                  placeholder="Note (optional)"
-                  style={{ width: 140, padding: 4, fontSize: 12 }}
-                />
-                <button type="submit" style={{ padding: "4px 10px", fontSize: 13 }} disabled={v.stock <= 0}>
-                  {v.stock <= 0 ? "Sold out" : "Sold"}
-                </button>
-              </ActionForm>
-            ))}
-          </div>
-        ))}
+              )}
+              {variants.map((v) => (
+                <ActionForm
+                  action={recordOfflineSale}
+                  successMessage="Logged."
+                  resetOnSuccess
+                  key={v.id}
+                  style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}
+                >
+                  <input type="hidden" name="artistId" value={artist.id} />
+                  <input type="hidden" name="productId" value={product.id} />
+                  <input type="hidden" name="variantId" value={v.id} />
+                  <span style={{ fontSize: 13, flex: "1 1 160px" }}>
+                    {v.label} — Rs. {v.price.toLocaleString("en-US")}
+                    {poolStock == null ? ` — ${v.stock} in stock` : ""}
+                  </span>
+                  <input type="number" name="quantity" defaultValue={1} min={1} style={{ width: 56, padding: 4 }} />
+                  <input
+                    type="text"
+                    name="notes"
+                    placeholder="Note (optional)"
+                    style={{ width: 140, padding: 4, fontSize: 12 }}
+                  />
+                  <button type="submit" style={{ padding: "4px 10px", fontSize: 13 }} disabled={v.stock <= 0}>
+                    {v.stock <= 0 ? "Sold out" : "Sold"}
+                  </button>
+                </ActionForm>
+              ))}
+            </div>
+          );
+        })}
       </section>
 
       <EndOfDayPanel sales={todaySales} total={todayTotal} />

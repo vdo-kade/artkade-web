@@ -155,14 +155,15 @@ export function sortVariantsByPrice<T extends { label: string; price: number }>(
   return [...variants].sort((a, b) => a.price - b.price || sizeOrderIndex(a.label) - sizeOrderIndex(b.label));
 }
 
-// stallSlug is passed in explicitly rather than selected as a nested
-// `artists(slug)` on every ProductRow -- the stall page and homepage both
-// already know it per-query (they fetch one stall's products at a time),
-// and PostgREST rejects a second `artists(...)` embed on the same query
-// where one's already needed with `!inner` (search page's is_active
-// filter), so a single shared embed shape can't cleanly serve all three
-// call sites. Each caller supplies the slug it already has in scope.
-export function mapProduct(row: ProductRow, stallSlug: string): Product {
+// stallSlug/stallName are passed in explicitly rather than selected as a
+// nested `artists(slug, name)` on every ProductRow -- the stall page and
+// homepage both already know them per-query (they fetch one stall's
+// products at a time), and PostgREST rejects a second `artists(...)` embed
+// on the same query where one's already needed with `!inner` (search
+// page's is_active filter), so a single shared embed shape can't cleanly
+// serve all three call sites. Each caller supplies what it already has in
+// scope.
+export function mapProduct(row: ProductRow, stallSlug: string, stallName: string): Product {
   const variants = normalizeVariants(sortVariantsByPrice(row.product_variants));
   const editionAggregate = computeEditionAggregate(row.shared_stock_pool, variants);
   // editionAggregate is undefined exactly when no variant on this product has
@@ -179,6 +180,7 @@ export function mapProduct(row: ProductRow, stallSlug: string): Product {
     artistId: row.artist_id,
     slug: row.slug,
     stallSlug,
+    stallName,
     name: row.name,
     category: row.category,
     imageUrl: row.image_url ?? undefined,

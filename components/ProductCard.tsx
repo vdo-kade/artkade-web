@@ -22,6 +22,7 @@ export type Product = {
   artistId: string;
   slug: string;
   stallSlug: string;
+  stallName: string;
   name: string;
   // Raw product_category enum value (see supabase/schema.sql) -- rendered
   // via PRODUCT_TYPE_LABELS as a small tag next to the name, since some
@@ -64,7 +65,21 @@ export type Product = {
 // this undoes the work already done to keep Cached Egress under quota.
 export const PRIORITY_CARD_COUNT = 3;
 
-export default function ProductCard({ product, priority = false }: { product: Product; priority?: boolean }) {
+export default function ProductCard({
+  product,
+  priority = false,
+  showStall = true,
+}: {
+  product: Product;
+  priority?: boolean;
+  // Off on the stall's own page (app/stalls/[slug]/page.tsx) -- every card
+  // there is already that one stall's, so repeating its name on every card
+  // is just noise. On everywhere products from more than one stall sit
+  // side by side: the homepage drop, search results. A prop rather than
+  // the card inferring its own context (e.g. from the current route)
+  // because that context lives with the caller, not the card.
+  showStall?: boolean;
+}) {
   const soldOut = product.stockRemaining !== undefined && product.stockRemaining <= 0;
 
   // A single-variant limited-run product (the common case -- most prints
@@ -128,6 +143,14 @@ export default function ProductCard({ product, priority = false }: { product: Pr
       <div className="pt-3 px-1">
         <p className="font-mono text-[10px] uppercase tracking-eyebrow text-warm-grey mb-0.5">
           {PRODUCT_TYPE_LABELS[product.category] ?? product.category}
+          {showStall && (
+            <>
+              {" · "}
+              <Link href={`/stalls/${product.stallSlug}`} className="hover:text-accent transition-colors">
+                {product.stallName}
+              </Link>
+            </>
+          )}
         </p>
         {/* Opens as a layered overlay (intercepting route) when clicked from
             here, but is still a real shareable URL -- see

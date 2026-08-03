@@ -8,7 +8,7 @@ import { PRODUCT_SELECT, mapProduct, mapStall } from "@/lib/catalogue";
 
 export const revalidate = 0;
 
-type SearchProductRow = Parameters<typeof mapProduct>[0] & { artists: { slug: string } };
+type SearchProductRow = Parameters<typeof mapProduct>[0] & { artists: { slug: string; name: string } };
 
 // Simple substring match (ilike), not fuzzy -- same RLS-backed anon client
 // and active/published filtering every other public page uses (see
@@ -36,7 +36,7 @@ export default async function SearchPage({ searchParams }: { searchParams: { q?:
       // artist at once, not one known stall at a time.
       supabase
         .from("products")
-        .select(`${PRODUCT_SELECT}, artists!inner(slug, is_active)`)
+        .select(`${PRODUCT_SELECT}, artists!inner(slug, name, is_active)`)
         .eq("is_active", true)
         .eq("artists.is_active", true)
         .ilike("name", `%${q}%`)
@@ -44,7 +44,7 @@ export default async function SearchPage({ searchParams }: { searchParams: { q?:
         .limit(24),
     ]);
     stalls = (artistRows ?? []).map(mapStall);
-    products = ((productRows as SearchProductRow[] | null) ?? []).map((p) => mapProduct(p, p.artists.slug));
+    products = ((productRows as SearchProductRow[] | null) ?? []).map((p) => mapProduct(p, p.artists.slug, p.artists.name));
   }
 
   const hasResults = stalls.length > 0 || products.length > 0;

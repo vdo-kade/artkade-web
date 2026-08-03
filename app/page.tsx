@@ -80,7 +80,7 @@ export default async function LandingPage() {
     )
   );
   const perArtistProducts = perArtistResults.map((r, i) =>
-    (r.data ?? []).map((p) => mapProduct(p, activeArtists[i].slug))
+    (r.data ?? []).map((p) => mapProduct(p, activeArtists[i].slug, activeArtists[i].name))
   );
   const FEATURED_PRODUCTS: Product[] = interleaveFairly(perArtistProducts, FEATURED_DROP_TOTAL);
 

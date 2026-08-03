@@ -35,7 +35,7 @@ export default async function StallPage({ params }: { params: { slug: string } }
     title: CATEGORY_LABELS[category],
     products: artist.products
       .filter((p) => p.category === category)
-      .map((p) => mapProduct(p, artist.slug)) as Product[],
+      .map((p) => mapProduct(p, artist.slug, artist.name)) as Product[],
   })).filter((section) => section.products.length > 0);
 
   return (
@@ -104,7 +104,7 @@ export default async function StallPage({ params }: { params: { slug: string } }
                 {section.products.map((p) => {
                   const priority = priorityRemaining > 0;
                   if (priority) priorityRemaining--;
-                  return <ProductCard key={p.id} product={p} priority={priority} />;
+                  return <ProductCard key={p.id} product={p} priority={priority} showStall={false} />;
                 })}
               </div>
             </div>

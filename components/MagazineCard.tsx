@@ -17,7 +17,7 @@ export type MagazinePost = {
 export default function MagazineCard({ post, featured = false }: { post: MagazinePost; featured?: boolean }) {
   return (
     <article>
-      <div className="bg-white border border-line p-3 pb-4">
+      <div className="light-surface bg-white border border-line p-3 pb-4">
         <ExpandableImage
           images={post.heroImageUrl ? [{ src: post.heroImageUrl, alt: post.title }] : []}
           frameClassName="bg-paper min-h-[10rem] flex items-center justify-center overflow-hidden"
@@ -35,8 +35,14 @@ export default function MagazineCard({ post, featured = false }: { post: Magazin
           <p className="font-mono text-xs uppercase text-accent mb-2">{post.category}</p>
         )}
         <Link href={`/magazine/${post.slug}`} className="group">
+          {/* No transition-colors on this h2/link pair -- their resting
+              colour inherits ink (unpinned, flips with theme), and
+              transition-colors on a var()-based, theme-varying colour
+              leaves it stuck at the pre-toggle colour (see
+              app/not-found.tsx's comment). Hover still switches instantly
+              to accent, just without the animated fade. */}
           <h2
-            className={`font-display leading-tight group-hover:text-accent transition-colors ${
+            className={`font-display leading-tight group-hover:text-accent ${
               featured ? "text-3xl md:text-4xl mb-3" : "text-xl mb-2"
             }`}
           >
@@ -50,7 +56,7 @@ export default function MagazineCard({ post, featured = false }: { post: Magazin
         )}
         <Link
           href={`/magazine/${post.slug}`}
-          className="text-sm font-medium hover:text-accent transition-colors"
+          className="text-sm font-medium hover:text-accent"
         >
           Read the story &rarr;
         </Link>

@@ -115,7 +115,7 @@ function PolaroidSlot({
 
   return (
     <div
-      className={`absolute bg-white border border-line p-1.5 pb-3 shadow-md ${slot.className ?? ""}`}
+      className={`light-surface absolute bg-white border border-line p-1.5 pb-3 shadow-md ${slot.className ?? ""}`}
       style={{ top: slot.top, left: slot.left, width: slot.width, transform: `rotate(${slot.rotate})` }}
     >
       {/* Fixed square-ish crop, unlike ProductCard's "never crop" rule --

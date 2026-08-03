@@ -40,7 +40,7 @@ export default function AddToBagButton({
   }
 
   return (
-    <div className="mt-3">
+    <div className="light-surface mt-3">
       <div className="flex items-center gap-2">
         {variants.length > 1 && (
           <select
@@ -66,7 +66,7 @@ export default function AddToBagButton({
           type="button"
           onClick={handleAddClick}
           disabled={soldOut}
-          className="shrink-0 bg-ink text-white text-xs font-medium px-3 py-1.5 hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="light-surface shrink-0 bg-ink text-white text-xs font-medium px-3 py-1.5 hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {added ? "Added ✓" : soldOut ? "Sold out" : "Add to bag"}
         </button>

@@ -96,12 +96,12 @@ export default function ProductCard({
 
   return (
     <div
-      className={`group relative min-w-0 bg-white border border-line p-3 pb-5 rotate-[-0.6deg] hover:rotate-0 transition-transform ${
+      className={`light-surface group relative min-w-0 bg-white border border-line p-3 pb-5 rotate-[-0.6deg] hover:rotate-0 transition-transform ${
         soldOut ? "opacity-50 grayscale" : ""
       }`}
     >
       {product.isBestseller && (
-        <span className="absolute -top-2 left-3 bg-ink text-white text-[10px] font-mono uppercase tracking-wide px-2 py-1">
+        <span className="light-surface absolute -top-2 left-3 bg-ink text-white text-[10px] font-mono uppercase tracking-wide px-2 py-1">
           Bestseller
         </span>
       )}

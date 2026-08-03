@@ -111,7 +111,7 @@ export default async function MagazinePostPage({ params }: { params: { slug: str
         )}
 
         {post.hero_image_url && (
-          <div className="bg-white border border-line p-3 mb-10">
+          <div className="light-surface bg-white border border-line p-3 mb-10">
             <ExpandableImage
               images={[{ src: post.hero_image_url, alt: post.title }]}
               frameClassName="bg-paper flex items-center justify-center overflow-hidden"

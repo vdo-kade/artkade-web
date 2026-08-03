@@ -134,7 +134,7 @@ export default async function LandingPage() {
         </p>
         <a
           href="#stalls"
-          className="inline-block bg-ink text-white px-7 py-3 text-sm font-medium tracking-wide hover:bg-accent transition-colors"
+          className="light-surface inline-block bg-ink text-white px-7 py-3 text-sm font-medium tracking-wide hover:bg-accent transition-colors"
         >
           Browse the Stalls
         </a>

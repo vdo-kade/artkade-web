@@ -58,67 +58,80 @@ export default async function GatePage() {
           Art Kade is still being built behind closed doors. If you already have the password, come on in.
         </p>
 
-        <ActionForm action={enterGate}>
-          <label
-            htmlFor="gate-password"
-            className="block text-left font-mono text-xs uppercase tracking-eyebrow text-warm-grey mb-2"
-          >
-            Enter the password
-          </label>
-          <input
-            id="gate-password"
-            type="password"
-            name="password"
-            required
-            autoComplete="off"
-            className="w-full border border-line bg-white px-4 py-3 mb-4 text-base"
-          />
-          <button
-            type="submit"
-            className="w-full bg-ink text-white px-7 py-3 text-sm font-medium tracking-wide hover:bg-accent transition-colors"
-          >
-            Enter the Kade
-          </button>
-        </ActionForm>
+        <div className="light-surface">
+          <ActionForm action={enterGate}>
+            <label
+              htmlFor="gate-password"
+              className="block text-left font-mono text-xs uppercase tracking-eyebrow text-warm-grey mb-2"
+            >
+              Enter the password
+            </label>
+            <input
+              id="gate-password"
+              type="password"
+              name="password"
+              required
+              autoComplete="off"
+              className="w-full border border-line bg-white px-4 py-3 mb-4 text-base"
+            />
+            <button
+              type="submit"
+              className="light-surface w-full bg-ink text-white px-7 py-3 text-sm font-medium tracking-wide hover:bg-accent transition-colors"
+            >
+              Enter the Kade
+            </button>
+          </ActionForm>
+        </div>
 
         <div className="my-10 border-t border-line" />
 
         <p className="text-sm text-warm-grey mb-4">
           No password? Leave your email below, and you might get let in early — before anyone else finds the door.
         </p>
-        <ActionForm action={submitBetaSignup} successMessage="You're on the list." resetOnSuccess>
-          {/* Honeypot -- invisible to real visitors (off-screen, unreachable
-              by tab, hidden from screen readers), but a scripted bot filling
-              every field it finds will fill this one too. See the "company"
-              check in submitBetaSignup. */}
-          <input
-            type="text"
-            name="company"
-            tabIndex={-1}
-            autoComplete="off"
-            aria-hidden="true"
-            style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }}
-          />
-          <label
-            htmlFor="gate-email"
-            className="block text-left font-mono text-xs uppercase tracking-eyebrow text-warm-grey mb-2"
-          >
-            Your email
-          </label>
-          <input
-            id="gate-email"
-            type="email"
-            name="email"
-            required
-            className="w-full border border-line bg-white px-4 py-3 mb-4 text-base"
-          />
-          <button
-            type="submit"
-            className="w-full border border-ink px-7 py-3 text-sm font-medium tracking-wide hover:border-accent hover:text-accent transition-colors"
-          >
-            Ask to Enter
-          </button>
-        </ActionForm>
+        <div>
+          {/* Unlike the password form above, this one isn't wrapped in
+              .light-surface as a whole -- its button is an outline (no
+              fill), and pinning the wrapper would cascade the pinned
+              (fixed-dark) --color-ink into it too, leaving dark text on a
+              dark canvas with nothing to give it contrast (a solid
+              bg-ink button has its own fill to read against; an outline
+              button has only the page behind it, so it needs to flip
+              with the page instead of staying fixed). Only the input
+              itself is pinned directly. */}
+          <ActionForm action={submitBetaSignup} successMessage="You're on the list." resetOnSuccess>
+            {/* Honeypot -- invisible to real visitors (off-screen, unreachable
+                by tab, hidden from screen readers), but a scripted bot filling
+                every field it finds will fill this one too. See the "company"
+                check in submitBetaSignup. */}
+            <input
+              type="text"
+              name="company"
+              tabIndex={-1}
+              autoComplete="off"
+              aria-hidden="true"
+              style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }}
+            />
+            <label
+              htmlFor="gate-email"
+              className="block text-left font-mono text-xs uppercase tracking-eyebrow text-warm-grey mb-2"
+            >
+              Your email
+            </label>
+            <input
+              id="gate-email"
+              type="email"
+              name="email"
+              required
+              className="light-surface w-full border border-line bg-white px-4 py-3 mb-4 text-base"
+            />
+            <button
+              type="submit"
+              className="w-full border border-ink px-7 py-3 text-sm font-medium tracking-wide hover:border-accent hover:text-accent"
+            >
+              Ask to Enter
+            </button>
+          </ActionForm>
+        </div>
       </div>
     </main>
   );

@@ -30,7 +30,7 @@ export default function ProductModal({ children }: { children: ReactNode }) {
   return createPortal(
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-[90] bg-ink/50 overflow-y-auto"
+      className="fixed inset-0 z-[90] bg-black/50 overflow-y-auto"
       onClick={(e) => {
         if (e.target === overlayRef.current) router.back();
       }}
@@ -41,7 +41,7 @@ export default function ProductModal({ children }: { children: ReactNode }) {
             type="button"
             onClick={() => router.back()}
             aria-label="Close"
-            className="absolute top-[calc(env(safe-area-inset-top)_+_0.75rem)] right-4 z-10 bg-white/90 hover:bg-white text-ink rounded-full w-9 h-9 flex items-center justify-center text-2xl leading-none shadow"
+            className="light-surface absolute top-[calc(env(safe-area-inset-top)_+_0.75rem)] right-4 z-10 bg-white/90 hover:bg-white text-ink rounded-full w-9 h-9 flex items-center justify-center text-2xl leading-none shadow"
           >
             &times;
           </button>

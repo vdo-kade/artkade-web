@@ -24,16 +24,18 @@ export default function Error({
         Sorry about that -- something went wrong loading this page. Your bag
         is safe, it&apos;s stored on your device.
       </p>
+      {/* Only the solid button is pinned -- see app/not-found.tsx's
+          identical pairing for why the outline one isn't. */}
       <div className="flex items-center justify-center gap-4">
         <button
           onClick={reset}
-          className="bg-ink text-white px-7 py-3 text-sm font-medium hover:bg-accent transition-colors"
+          className="light-surface bg-ink text-white px-7 py-3 text-sm font-medium hover:bg-accent transition-colors"
         >
           Try again
         </button>
         <Link
           href="/"
-          className="border border-line px-7 py-3 text-sm font-medium hover:border-accent hover:text-accent transition-colors"
+          className="border border-line px-7 py-3 text-sm font-medium hover:border-accent hover:text-accent"
         >
           Back to Art Kade
         </Link>

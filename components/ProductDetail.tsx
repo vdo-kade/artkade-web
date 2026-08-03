@@ -30,7 +30,7 @@ export default function ProductDetail({ product }: { product: ProductDetailData 
         }}
       />
       <div className="grid md:grid-cols-2 gap-8 md:gap-12">
-        <div>
+        <div className="light-surface">
           <ExpandableImage
             images={product.images}
             frameClassName="bg-paper flex items-center justify-center overflow-hidden"

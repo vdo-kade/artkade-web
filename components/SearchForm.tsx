@@ -17,7 +17,7 @@ export default function SearchForm({
       <label htmlFor={id} className="sr-only">
         Search products and stalls
       </label>
-      <div className="relative">
+      <div className="light-surface relative">
         <input
           id={id}
           type="search"

@@ -29,7 +29,7 @@ export default function FreebieCard({ freebie }: { freebie: Freebie }) {
   const downloadUrl = `/api/freebie/${freebie.id}`;
 
   return (
-    <div className="bg-white border border-line p-3 pb-4">
+    <div className="light-surface bg-white border border-line p-3 pb-4">
       <div className="bg-paper min-h-[8rem] flex items-center justify-center overflow-hidden">
         {previewImage ? (
           // Placeholder intrinsic size, same reasoning as ExpandableImage --

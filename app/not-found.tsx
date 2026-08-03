@@ -21,16 +21,29 @@ export default function NotFound() {
           Whatever you were looking for isn&apos;t here — sold out, moved, or the link lost
           something on the way over. Happens a lot with WhatsApp.
         </p>
+        {/* Only the solid button is pinned -- an outline button has no
+            fill of its own to read against, so it needs to flip with the
+            page rather than stay fixed-dark (see app/gate/page.tsx's
+            "Ask to Enter" for the same reasoning). Pinning the whole
+            wrapper here would cascade into the outline button too and
+            leave it dark-on-dark. The outline button also drops
+            transition-colors (confirmed live): an element whose resting
+            colour is var()-based and changes with the theme toggle gets
+            stuck showing the pre-toggle colour indefinitely when
+            transition-colors is present -- not just a first-paint flash,
+            reproduced well after the toggle settled. Root cause not fully
+            isolated; dropping the transition is the confirmed fix. Hover
+            colour changes are still instant, just not animated. */}
         <div className="flex items-center justify-center gap-4 flex-wrap">
           <Link
             href="/#stalls"
-            className="inline-block bg-ink text-white px-7 py-3 text-sm font-medium hover:bg-accent transition-colors"
+            className="light-surface inline-block bg-ink text-white px-7 py-3 text-sm font-medium hover:bg-accent transition-colors"
           >
             Browse the stalls
           </Link>
           <Link
             href="/"
-            className="inline-block border border-ink px-7 py-3 text-sm font-medium hover:border-accent hover:text-accent transition-colors"
+            className="inline-block border border-ink px-7 py-3 text-sm font-medium hover:border-accent hover:text-accent"
           >
             Back to the homepage
           </Link>

@@ -32,11 +32,11 @@ export default function SizeGuideButton({
       {open &&
         createPortal(
           <div
-            className="fixed inset-0 z-[110] bg-ink/60 flex items-center justify-center p-4"
+            className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4"
             onClick={() => setOpen(false)}
           >
             <div
-              className="bg-white max-w-sm w-full p-6"
+              className="light-surface bg-white max-w-sm w-full p-6"
               onClick={(e) => e.stopPropagation()}
             >
               <p className="font-display text-lg mb-4 text-center">Sizing chart</p>

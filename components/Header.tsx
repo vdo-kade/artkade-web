@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useBag } from "./BagProvider";
 import SearchForm from "./SearchForm";
+import ThemeToggle from "./ThemeToggle";
 import { SHORT_LOGO_URL, LOGO_SHADOW_FILTER } from "@/lib/brand";
 import { minimumOrderProgressText } from "@/lib/checkout";
 
@@ -79,10 +80,11 @@ export default function Header() {
         </nav>
         <div className="flex items-center gap-3">
           <SearchForm id="site-search-desktop" className="hidden md:block w-40 lg:w-56" />
+          <ThemeToggle />
           <Link
             href="/checkout"
             aria-label="Your bag"
-            className="rounded-full border border-line px-4 py-2 text-sm font-medium hover:border-accent hover:text-accent transition-colors"
+            className="rounded-full border border-line px-4 py-2 text-sm font-medium hover:border-accent hover:text-accent"
             onClick={() => setMenuOpen(false)}
           >
             Your Bag{totalItems > 0 ? ` (${totalItems})` : ""}
@@ -128,7 +130,7 @@ export default function Header() {
         // header at the exact width where the blur returns.
         createPortal(
           <div
-            className="md:hidden fixed inset-0 z-30 bg-ink/20"
+            className="md:hidden fixed inset-0 z-30 bg-black/20"
             aria-hidden
             onClick={() => setMenuOpen(false)}
           />,

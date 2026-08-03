@@ -36,8 +36,16 @@ export function contrastRatio(hexA: string, hexB: string): number {
 // The site's cream page background (tailwind.config.ts's `cream`) -- what
 // a stall's accent colour actually renders against (StallCard's accent
 // swatch, the stall page's own accent-tinted hero wash, "text-accent"
-// links/badges throughout that stall's pages).
+// links/badges throughout that stall's pages) in light mode.
 export const CREAM_BACKGROUND = "#F5EFE4";
+
+// The dark-mode page canvas (globals.css's `.dark` override for `cream`) --
+// a straight reuse of the light-mode `ink` value, not a new colour (see
+// that file's own comment). The accent swatch that isn't inside a
+// light-surface card (currently just /freebies' stall bar) renders against
+// this in dark mode, so a colour only validated against cream could read
+// fine in light mode and disappear in dark mode.
+export const DARK_BACKGROUND = "#1C1712";
 
 // WCAG 2.1 SC 1.4.11 (non-text contrast) minimum for a meaningful graphical
 // UI element against its background -- the accent swatch/links are exactly
@@ -45,6 +53,17 @@ export const CREAM_BACKGROUND = "#F5EFE4";
 // the stricter 4.5:1 normal-text minimum.
 export const MIN_ACCENT_CONTRAST = 3;
 
+// Checked against both page backgrounds, not just cream -- a colour that
+// only clears the bar on one of them would go unreadable the moment the
+// visitor (or the vendor previewing their own stall) switches theme. Note
+// this makes the guard strictly stricter than before dark mode existed;
+// see app/vendor/actions.ts's updateStallDetails for why an unchanged
+// existing colour is grandfathered around this rather than validated fresh
+// on every save.
 export function isAccentColorReadable(hex: string): boolean {
-  return isValidHexColor(hex) && contrastRatio(hex, CREAM_BACKGROUND) >= MIN_ACCENT_CONTRAST;
+  return (
+    isValidHexColor(hex) &&
+    contrastRatio(hex, CREAM_BACKGROUND) >= MIN_ACCENT_CONTRAST &&
+    contrastRatio(hex, DARK_BACKGROUND) >= MIN_ACCENT_CONTRAST
+  );
 }

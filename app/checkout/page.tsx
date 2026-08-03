@@ -47,7 +47,7 @@ function BankTransferDetails() {
   }, []);
 
   return (
-    <div className="border border-line p-4 bg-white mb-6">
+    <div className="light-surface border border-line p-4 bg-white mb-6">
       <h2 className="font-display text-xl mb-3">Pay by bank transfer</h2>
       {!loaded ? (
         <p className="text-sm text-warm-grey">Loading payment details...</p>
@@ -181,11 +181,11 @@ export default function CheckoutPage() {
             We&apos;ll confirm once we&apos;ve checked your payment. Hang on to
             your order number:
           </p>
-          <p className="font-mono text-lg bg-white border border-line inline-block px-4 py-2 mb-8">
+          <p className="light-surface font-mono text-lg bg-white border border-line inline-block px-4 py-2 mb-8">
             {orderNumber}
           </p>
           {isBulk ? (
-            <p className="text-warm-grey mb-8 border border-line bg-white p-4 text-left">
+            <p className="light-surface text-warm-grey mb-8 border border-line bg-white p-4 text-left">
               Ordering more than a kilo&apos;s worth? Message us on WhatsApp at{" "}
               <a href={BULK_ORDER_WHATSAPP_URL} className="text-accent underline" target="_blank" rel="noopener noreferrer">
                 {BULK_ORDER_PHONE_DISPLAY}
@@ -193,21 +193,23 @@ export default function CheckoutPage() {
               and we&apos;ll sort out the shipping with you directly.
             </p>
           ) : (
-            <p className="text-warm-grey mb-8 border border-line bg-white p-4 text-left">
+            <p className="light-surface text-warm-grey mb-8 border border-line bg-white p-4 text-left">
               Free shipping on everything. Orders close Friday. Allow two weeks. Packed by
               hand by a small team of artists.
             </p>
           )}
+          {/* Only the solid button is pinned -- see app/not-found.tsx's
+              identical pairing for why the outline one isn't. */}
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <Link
               href="/"
-              className="inline-block bg-ink text-white px-7 py-3 text-sm font-medium hover:bg-accent transition-colors"
+              className="light-surface inline-block bg-ink text-white px-7 py-3 text-sm font-medium hover:bg-accent transition-colors"
             >
               Back to Art Kade
             </Link>
             <Link
               href={`/track?order=${encodeURIComponent(orderNumber)}`}
-              className="inline-block border border-ink px-7 py-3 text-sm font-medium hover:border-accent hover:text-accent transition-colors"
+              className="inline-block border border-ink px-7 py-3 text-sm font-medium hover:border-accent hover:text-accent"
             >
               Track this order
             </Link>
@@ -234,7 +236,7 @@ export default function CheckoutPage() {
           </p>
         ) : (
           <>
-          <div className="border border-line bg-white p-4 mb-8 text-sm text-warm-grey">
+          <div className="light-surface border border-line bg-white p-4 mb-8 text-sm text-warm-grey">
             <p className="font-medium text-ink mb-1">Free shipping, always.</p>
             <p className="mb-3">
               Orders close Friday at midnight. Anything ordered after that goes into next
@@ -275,13 +277,20 @@ export default function CheckoutPage() {
                         <p className="text-warm-grey text-xs">{item.variantLabel}</p>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
+                        {/* transition-[background-color], not transition-colors --
+                            these buttons' "−"/"+" glyphs inherit ink (unpinned,
+                            flips with theme), and transition-colors on an
+                            element whose resting colour is var()-based and
+                            theme-varying leaves it stuck at the pre-toggle
+                            colour (see app/not-found.tsx's comment). Only the
+                            hover:bg-paper background needs to animate. */}
                         <div className="flex items-center border border-line">
                           <button
                             type="button"
                             onClick={() => updateQuantity(bagItemKey(item), item.quantity - 1)}
                             disabled={item.quantity <= 1}
                             aria-label={`Decrease quantity of ${item.productName}`}
-                            className="w-7 h-7 flex items-center justify-center hover:bg-paper disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            className="w-7 h-7 flex items-center justify-center hover:bg-paper disabled:opacity-30 disabled:cursor-not-allowed transition-[background-color]"
                           >
                             −
                           </button>
@@ -292,7 +301,7 @@ export default function CheckoutPage() {
                             disabled={atMax}
                             title={atMax ? "No more in stock" : undefined}
                             aria-label={`Increase quantity of ${item.productName}`}
-                            className="w-7 h-7 flex items-center justify-center hover:bg-paper disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            className="w-7 h-7 flex items-center justify-center hover:bg-paper disabled:opacity-30 disabled:cursor-not-allowed transition-[background-color]"
                           >
                             +
                           </button>
@@ -324,6 +333,16 @@ export default function CheckoutPage() {
               )}
             </div>
 
+            {/* Not a light-surface itself -- this form has no background
+                box of its own (just individual white inputs inside it),
+                so pinning the whole form left its bare labels (nothing
+                behind them but the dark canvas) rendering as pinned-dark
+                text directly on the dark canvas: invisible. Each input
+                is pinned individually instead, which is also all that's
+                actually needed -- an input's OWN typed text has to stay
+                dark to read against its own white fill, but a label
+                floating above it should flip with the page like any
+                other page-level text. */}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-mono uppercase tracking-wide mb-1">
@@ -333,7 +352,7 @@ export default function CheckoutPage() {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full border border-line px-3 py-2 text-sm bg-white"
+                  className="light-surface w-full border border-line px-3 py-2 text-sm bg-white"
                 />
               </div>
               <div>
@@ -345,7 +364,7 @@ export default function CheckoutPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full border border-line px-3 py-2 text-sm bg-white"
+                  className="light-surface w-full border border-line px-3 py-2 text-sm bg-white"
                 />
               </div>
               <div>
@@ -356,7 +375,7 @@ export default function CheckoutPage() {
                   required
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="w-full border border-line px-3 py-2 text-sm bg-white"
+                  className="light-surface w-full border border-line px-3 py-2 text-sm bg-white"
                 />
               </div>
               <div>
@@ -368,7 +387,7 @@ export default function CheckoutPage() {
                   rows={3}
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  className="w-full border border-line px-3 py-2 text-sm bg-white"
+                  className="light-surface w-full border border-line px-3 py-2 text-sm bg-white"
                 />
               </div>
               <div>
@@ -379,7 +398,7 @@ export default function CheckoutPage() {
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full border border-line px-3 py-2 text-sm bg-white"
+                  className="light-surface w-full border border-line px-3 py-2 text-sm bg-white"
                 />
               </div>
               <BankTransferDetails />
@@ -402,7 +421,7 @@ export default function CheckoutPage() {
               <button
                 type="submit"
                 disabled={submitting || belowMinimum}
-                className="w-full bg-ink text-white px-7 py-3 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
+                className="light-surface w-full bg-ink text-white px-7 py-3 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
               >
                 {submitting
                   ? "Placing order..."

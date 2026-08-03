@@ -14,7 +14,7 @@ export default function StallCard({ stall }: { stall: Stall }) {
   return (
     <Link
       href={`/stalls/${stall.slug}`}
-      className="group block bg-white border border-line p-6 transition-shadow hover:shadow-[6px_6px_0_rgba(28,23,18,0.08)]"
+      className="light-surface group block bg-white border border-line p-6 transition-shadow hover:shadow-[6px_6px_0_rgba(28,23,18,0.08)]"
     >
       <div
         className="h-2 w-10 mb-5"

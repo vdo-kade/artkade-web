@@ -72,7 +72,7 @@ export default async function StallPage({ params }: { params: { slug: string } }
               width={128}
               height={128}
               sizes="64px"
-              className="mx-auto mb-4 h-16 w-16 rounded-full border border-line bg-white object-cover"
+              className="light-surface mx-auto mb-4 h-16 w-16 rounded-full border border-line bg-white object-cover"
             />
           )}
           <h1 className={`font-display text-5xl mb-3 ${artist.hero_image_url ? "text-white" : ""}`}>
@@ -83,7 +83,7 @@ export default async function StallPage({ params }: { params: { slug: string } }
             <p className={`mt-3 ${artist.hero_image_url ? "text-white/80" : "text-warm-grey"}`}>{artist.bio}</p>
           )}
           {artist.is_popup && artist.popup_ends_at && (
-            <p className="mt-4 inline-block bg-ink text-white text-xs font-mono uppercase px-3 py-2">
+            <p className="light-surface mt-4 inline-block bg-ink text-white text-xs font-mono uppercase px-3 py-2">
               Pop-up drop · <Countdown endsAt={artist.popup_ends_at} />
             </p>
           )}

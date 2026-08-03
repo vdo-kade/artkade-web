@@ -62,27 +62,45 @@ export async function updateStallDetails(formData: FormData): Promise<ActionStat
     return { ok: false, error: "You don't have permission to edit this stall." };
   }
 
+  const supabase = createAdminClient();
+
   // <input type="color"> always submits a well-formed #rrggbb, but this is
   // still a Server Action any request can call directly with an arbitrary
   // body -- validate the shape for real rather than trusting the client.
   let accentColor = "#C08A2E";
   if (typeof accentColorRaw === "string" && accentColorRaw.trim()) {
-    if (!isValidHexColor(accentColorRaw)) {
+    const trimmedColor = accentColorRaw.trim();
+    if (!isValidHexColor(trimmedColor)) {
       return { ok: false, error: "Accent colour must be a valid hex colour (e.g. #C08A2E)." };
     }
+    // This whole form resubmits every field on every save (bio, socials,
+    // popup dates, all of it), including a colour the vendor never
+    // touched -- so re-validating it unconditionally here would mean any
+    // stall whose already-saved colour fails today's guard (e.g. a
+    // tightened threshold, like dark mode's second background check) can
+    // never save anything else again until they pick a new colour they
+    // didn't come here to change. Only a genuine change to a NEW colour is
+    // held to the guard; an unchanged one is grandfathered through
+    // regardless of whether it'd pass if entered fresh.
+    const { data: currentArtist } = await supabase
+      .from("artists")
+      .select("accent_color")
+      .eq("id", artistId)
+      .maybeSingle<{ accent_color: string | null }>();
+    const isUnchanged = currentArtist?.accent_color?.toLowerCase() === trimmedColor.toLowerCase();
     // Rejected outright, not just a soft warning -- the accent renders
-    // directly on the site's cream background (StallCard's swatch, the
+    // directly on the site's page background (StallCard's swatch, the
     // stall page's own tinted hero, every text-accent link/badge on that
     // stall's pages), so a colour that fails contrast there would make the
     // vendor's own stall harder to read for every visitor, not just an
     // aesthetic nitpick.
-    if (!isAccentColorReadable(accentColorRaw)) {
+    if (!isUnchanged && !isAccentColorReadable(trimmedColor)) {
       return {
         ok: false,
-        error: `That colour is too close to the page background to read clearly (needs at least ${MIN_ACCENT_CONTRAST}:1 contrast against ${CREAM_BACKGROUND}). Pick something darker or more saturated.`,
+        error: `That colour is too close to the page background to read clearly (needs at least ${MIN_ACCENT_CONTRAST}:1 contrast against both the light page background ${CREAM_BACKGROUND} and the dark one). Pick something darker/lighter or more saturated.`,
       };
     }
-    accentColor = accentColorRaw.trim();
+    accentColor = trimmedColor;
   }
 
   const socials: { label: string; url: string }[] = [];
@@ -106,7 +124,6 @@ export async function updateStallDetails(formData: FormData): Promise<ActionStat
       ? new Date(popupEndsAtRaw).toISOString()
       : null;
 
-  const supabase = createAdminClient();
   const { error } = await supabase
     .from("artists")
     .update({

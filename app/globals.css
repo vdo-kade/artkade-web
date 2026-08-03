@@ -2,6 +2,124 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Colour tokens (see tailwind.config.ts's withOpacity) -- RGB triplets, not
+ * hex, so Tailwind's /NN opacity modifiers work against them.
+ *
+ * Only cream/ink/line differ between themes: cream is the page canvas,
+ * ink is what sits directly on it (default text, and -- swapped -- the
+ * dark-mode canvas itself), line is the border that has to flip from a
+ * dark-on-light hairline to a light-on-dark one to stay visible at all.
+ * paper/white/accent/warm-grey/charcoal are never redeclared below, so
+ * they're the same colour in both themes by construction, not by choice
+ * made twice -- confirmed via contrast check that each already reads fine
+ * against both backgrounds (warm-grey: 3.34:1 on cream, 4.65:1 on the dark
+ * canvas; accent: see lib/color.ts).
+ *
+ * Dark mode's cream (28 23 18) is exactly light mode's ink, and dark
+ * mode's ink (245 239 228) is exactly light mode's cream -- a straight
+ * swap of two colours already validated together, not a new colour. ink
+ * is already warm and desaturated (~9% lightness, ~30 deg hue, ~22%
+ * saturation) rather than a flat #000, which is what makes it read as
+ * "matte black" instead of a generic dark theme.
+ */
+/*
+ * Wrapped in Tailwind's own `base` layer (the same layer @tailwind base
+ * generates) rather than left unlayered -- an unlayered rule beats every
+ * layered one regardless of specificity or source position, which is
+ * exactly backwards here. `.light-surface`'s fallback `color` below has
+ * the same (0,1,0) specificity as a `.text-white`/`.text-warm-grey`
+ * utility and would otherwise win purely by coming later in the compiled
+ * CSS (globals.css's own rules sit after `@tailwind utilities` in this
+ * file) -- confirmed live: AddToBagButton's "Add to bag" (bg-ink
+ * text-white, nested inside a .light-surface ancestor) rendered with
+ * color: rgb(28,23,18), the SAME colour as its own background, until this
+ * moved into @layer base. Inside the base layer, any utility class
+ * (`components`/`utilities` layers) always wins regardless of specificity
+ * or order, same as `@tailwind base`'s own resets already do. */
+@layer base {
+  :root {
+    --color-cream: 245 239 228;
+    --color-paper: 239 231 216;
+    --color-white: 255 253 248;
+    --color-ink: 28 23 18;
+    --color-charcoal: 42 37 32;
+    --color-warm-grey: 139 129 117;
+    --color-accent: 192 138 46;
+    --color-line: 28 23 18;
+    --line-opacity: 0.12;
+    color-scheme: light;
+  }
+
+  .dark {
+    --color-cream: 28 23 18;
+    --color-ink: 245 239 228;
+    --color-line: 245 239 228;
+    --line-opacity: 0.14;
+    color-scheme: dark;
+  }
+
+  /*
+   * Product cards, boxed UI (form fields, info panels), and solid
+   * ink-filled buttons/badges keep their light appearance in dark mode --
+   * most artwork is black ink on white/cream paper, and letting the card
+   * itself go dark would both glare against the art and break buttons
+   * that depend on `ink` staying dark (bg-ink text-white would otherwise
+   * become a light button with invisible white text once `ink` flips at
+   * the root). Applied once per surface root; everything nested inside
+   * inherits these via the normal CSS cascade, so no individual
+   * bg-white/text-ink/border-line/bg-ink usage inside a light-surface
+   * needs to change at all.
+   */
+  .light-surface {
+    --color-cream: 245 239 228;
+    --color-ink: 28 23 18;
+    --color-line: 28 23 18;
+    --line-opacity: 0.12;
+    /* `color` is CSS's one inherited property among these -- body sets it
+       once (text-ink) and every descendant with no colour class of its own
+       (most headings/paragraphs in this app -- they rely on inheriting
+       body's colour, not repeating text-ink everywhere) inherits body's
+       already-computed value, not a live re-read of --color-ink.
+       Redeclaring the custom property above is invisible to anything that
+       only ever inherits a computed colour rather than evaluating
+       var(--color-ink) itself. This line is what actually breaks that
+       inheritance chain and re-establishes the pinned colour for this
+       subtree to inherit instead -- without it, e.g. StallCard's <h3> (no
+       explicit text colour) reads body's dark-mode text colour straight
+       through a light card, nearly invisible against bg-white. Background
+       and border utilities never had this problem: background-color and
+       border-color aren't inherited properties, so every
+       bg-white/border-line usage already re-evaluates its var() fresh at
+       its own element regardless of ancestors. */
+    color: rgb(var(--color-ink));
+    /* Native form controls (<select> popups, checkboxes, date pickers)
+       inside a light-surface should render with their light native
+       styling too, not follow the page's dark color-scheme -- otherwise
+       a pinned-light <select> can pop open a dark-styled native dropdown
+       list, which looks broken against its own light-styled closed
+       state. Also what keeps the vendor/admin dashboard's own native
+       controls light (see app/admin/layout.tsx, app/vendor/layout.tsx,
+       both just a .light-surface wrapper around the whole page). */
+    color-scheme: light;
+  }
+
+  /* A pinned bg-white card already reads clearly against the dark canvas
+     (white vs near-black is high contrast on its own), but a pinned
+     bg-ink button doesn't -- its fixed dark fill is nearly the same
+     colour as the dark canvas itself (dark mode's cream === light mode's
+     ink, see above), so without this the button's own boundary
+     disappears and only its white text seems to float there. Scoped to
+     .dark so light mode (where every light-surface already sits on a
+     literally lighter cream page) never gets this -- it would be a
+     pointless shadow there, not a fix for anything. Doubles as a gentle
+     "lift off the black" polish for the bg-white cards too, not just a
+     patch for the bg-ink case. */
+  .dark .light-surface {
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(var(--color-cream) / 0.08);
+  }
+}
+
 html {
   scroll-behavior: smooth;
 }

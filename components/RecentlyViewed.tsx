@@ -48,7 +48,10 @@ export default function RecentlyViewed({ excludeProductId }: { excludeProductId:
                 />
               )}
             </div>
-            <p className="text-xs leading-tight truncate group-hover:text-accent transition-colors">
+            {/* No transition-colors -- inherits ink (unpinned, flips with
+                theme); see app/not-found.tsx's comment for why that
+                combination sticks at the pre-toggle colour. */}
+            <p className="text-xs leading-tight truncate group-hover:text-accent">
               {p.name}
             </p>
           </Link>

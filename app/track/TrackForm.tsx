@@ -26,6 +26,9 @@ export default function TrackForm({ initialOrderNumber }: { initialOrderNumber: 
 
   return (
     <div>
+      {/* See app/checkout/page.tsx's identical form for why this isn't
+          itself a light-surface -- only the inputs are pinned; labels
+          flip with the page like any other page-level text. */}
       <form onSubmit={handleSubmit} className="space-y-4 mb-10">
         <div>
           <label className="block text-xs font-mono uppercase tracking-wide mb-1">
@@ -36,7 +39,7 @@ export default function TrackForm({ initialOrderNumber }: { initialOrderNumber: 
             value={orderNumber}
             onChange={(e) => setOrderNumber(e.target.value)}
             placeholder="ARTK-000482"
-            className="w-full border border-line px-3 py-2 text-sm bg-white"
+            className="light-surface w-full border border-line px-3 py-2 text-sm bg-white"
           />
         </div>
         <div>
@@ -46,7 +49,7 @@ export default function TrackForm({ initialOrderNumber }: { initialOrderNumber: 
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full border border-line px-3 py-2 text-sm bg-white"
+            className="light-surface w-full border border-line px-3 py-2 text-sm bg-white"
           />
         </div>
 
@@ -55,14 +58,14 @@ export default function TrackForm({ initialOrderNumber }: { initialOrderNumber: 
         <button
           type="submit"
           disabled={submitting}
-          className="w-full bg-ink text-white px-7 py-3 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
+          className="light-surface w-full bg-ink text-white px-7 py-3 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
         >
           {submitting ? "Looking up..." : "Track order"}
         </button>
       </form>
 
       {result?.ok && (
-        <div className="border border-line bg-white p-6">
+        <div className="light-surface border border-line bg-white p-6">
           <div className="flex items-center justify-between mb-1">
             <span className="font-mono text-lg">{result.order.orderNumber}</span>
             <span

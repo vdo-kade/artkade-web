@@ -167,7 +167,7 @@ export default function ExpandableImage({
             never hit this branch. Never relevant in linkHref mode either --
             that mode has no lightbox to jump within. */}
         {!linkHref && images.length > 1 && (
-          <div className="absolute bottom-2 right-2 flex gap-1 bg-white/90 p-1">
+          <div className="light-surface absolute bottom-2 right-2 flex gap-1 bg-white/90 p-1">
             {images.map((img, i) => (
               <button
                 key={img.src + i}
@@ -210,7 +210,7 @@ export default function ExpandableImage({
           // fixed to that small rotated card instead of the viewport.
           <div
             data-testid="image-lightbox"
-            className="fixed inset-0 z-[100] bg-ink/90 flex items-center justify-center p-4 sm:p-8"
+            className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 sm:p-8"
             onClick={() => setOpen(false)}
           >
             <button

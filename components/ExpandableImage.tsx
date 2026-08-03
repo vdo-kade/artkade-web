@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Image from "@/components/SelfHealingImage";
 import Link from "next/link";
+import { NO_COPY_IMAGE_CLASS, preventImageCopy } from "@/lib/imageProtection";
 
 export type ExpandableImageItem = { src: string; alt: string };
 
@@ -39,6 +40,7 @@ export default function ExpandableImage({
   linkHref,
   linkScroll = true,
   priority,
+  protectImage = false,
 }: {
   images: ExpandableImageItem[];
   className?: string;
@@ -57,6 +59,12 @@ export default function ExpandableImage({
   // leaving the rest lazy is what keeps a long stall page from fetching
   // every image up front and driving Cached Egress further over quota.
   priority?: boolean;
+  // Light anti-copy friction (right-click, drag-to-save, mobile long-press
+  // save) -- opt-in because this component is also shared by non-catalogue
+  // callers (magazine posts, the sizing-chart image) that don't want it.
+  // Only ProductCard and ProductDetail pass this. See lib/imageProtection.ts
+  // for what this does and doesn't stop.
+  protectImage?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
@@ -123,7 +131,10 @@ export default function ExpandableImage({
               height={1500}
               sizes={sizes}
               priority={priority}
-              className={`block w-full h-auto ${className ?? ""}`}
+              className={`block w-full h-auto ${protectImage ? NO_COPY_IMAGE_CLASS : ""} ${className ?? ""}`}
+              draggable={!protectImage}
+              onDragStart={protectImage ? preventImageCopy : undefined}
+              onContextMenu={protectImage ? preventImageCopy : undefined}
             />
           </Link>
         ) : (
@@ -140,7 +151,10 @@ export default function ExpandableImage({
               height={1500}
               sizes={sizes}
               priority={priority}
-              className={`block w-full h-auto ${className ?? ""}`}
+              className={`block w-full h-auto ${protectImage ? NO_COPY_IMAGE_CLASS : ""} ${className ?? ""}`}
+              draggable={!protectImage}
+              onDragStart={protectImage ? preventImageCopy : undefined}
+              onContextMenu={protectImage ? preventImageCopy : undefined}
             />
           </button>
         )}
@@ -169,7 +183,16 @@ export default function ExpandableImage({
                   i === index ? "border-ink" : "border-line/70 opacity-70 hover:opacity-100"
                 } transition-opacity`}
               >
-                <Image src={img.src} alt="" fill sizes="32px" className="object-cover" />
+                <Image
+                  src={img.src}
+                  alt=""
+                  fill
+                  sizes="32px"
+                  className={`object-cover ${protectImage ? NO_COPY_IMAGE_CLASS : ""}`}
+                  draggable={!protectImage}
+                  onDragStart={protectImage ? preventImageCopy : undefined}
+                  onContextMenu={protectImage ? preventImageCopy : undefined}
+                />
               </button>
             ))}
           </div>
@@ -221,7 +244,12 @@ export default function ExpandableImage({
               width={1200}
               height={1500}
               sizes="90vw"
-              className="max-w-[90vw] max-h-[85vh] w-auto h-auto object-contain select-none"
+              className={`max-w-[90vw] max-h-[85vh] w-auto h-auto object-contain select-none ${
+                protectImage ? NO_COPY_IMAGE_CLASS : ""
+              }`}
+              draggable={!protectImage}
+              onDragStart={protectImage ? preventImageCopy : undefined}
+              onContextMenu={protectImage ? preventImageCopy : undefined}
               onClick={(e) => e.stopPropagation()}
               onTouchStart={onTouchStart}
               onTouchEnd={onTouchEnd}

@@ -138,6 +138,7 @@ export default function ProductCard({
         linkHref={`/stalls/${product.stallSlug}/products/${product.slug}`}
         linkScroll={false}
         priority={priority}
+        protectImage
       />
 
       <div className="pt-3 px-1">

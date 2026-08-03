@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "@/components/SelfHealingImage";
 import { getRecentlyViewed, type ViewedProduct } from "@/lib/recentlyViewed";
+import { NO_COPY_IMAGE_CLASS, preventImageCopy } from "@/lib/imageProtection";
 
 // Real view history (see lib/recentlyViewed.ts), not "each stall's latest
 // drop" -- localStorage can only be read client-side, so this renders
@@ -40,7 +41,10 @@ export default function RecentlyViewed({ excludeProductId }: { excludeProductId:
                   width={192}
                   height={192}
                   sizes="96px"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  className={`w-full h-full object-cover group-hover:scale-105 transition-transform ${NO_COPY_IMAGE_CLASS}`}
+                  draggable={false}
+                  onDragStart={preventImageCopy}
+                  onContextMenu={preventImageCopy}
                 />
               )}
             </div>

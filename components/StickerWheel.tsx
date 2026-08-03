@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "@/components/SelfHealingImage";
 import Link from "next/link";
+import { NO_COPY_IMAGE_CLASS, preventImageCopy } from "@/lib/imageProtection";
 
 export type WheelImage = {
   id: string;
@@ -69,7 +70,16 @@ export default function StickerWheel({ images }: { images: WheelImage[] }) {
               opacity,
             }}
           >
-            <Image src={img.imageUrl} alt={img.label} fill sizes="104px" className="object-cover" />
+            <Image
+              src={img.imageUrl}
+              alt={img.label}
+              fill
+              sizes="104px"
+              className={`object-cover ${NO_COPY_IMAGE_CLASS}`}
+              draggable={false}
+              onDragStart={preventImageCopy}
+              onContextMenu={preventImageCopy}
+            />
           </Link>
         );
       })}

@@ -36,6 +36,7 @@ export default function ProductDetail({ product }: { product: ProductDetailData 
             frameClassName="bg-paper flex items-center justify-center overflow-hidden"
             placeholder={<span className="text-warm-grey text-xs font-mono">photo coming soon</span>}
             sizes="(min-width: 768px) 480px, 90vw"
+            protectImage
           />
         </div>
 

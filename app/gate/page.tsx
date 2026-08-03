@@ -3,17 +3,23 @@ import { createClient } from "@/lib/supabase-server";
 import { LOGO_URL, LOGO_SHADOW_FILTER } from "@/lib/brand";
 import { ActionForm } from "@/components/ActionForm";
 import PolaroidBackground, { type PolaroidImage } from "@/components/PolaroidBackground";
+import { firstBySortOrder, mediaPath } from "@/lib/catalogue";
 import { enterGate, submitBetaSignup } from "./actions";
 
 export const revalidate = 0;
 
-type ProductImageRow = { name: string; image_url: string | null };
+// Same proxy every other public product photo goes through (see
+// lib/catalogue.ts's mediaPath and app/api/media/image/[id]/route.ts) --
+// this page used to select image_url directly, which put the raw Storage
+// URL of up to 40 products' art in the DOM of the very first page an
+// anonymous, not-yet-gated visitor sees.
+type ProductImageRow = { name: string; product_images: { id: string; sort_order: number }[] };
 
 export default async function GatePage() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("products")
-    .select("name, image_url")
+    .select("name, product_images(id, sort_order)")
     .eq("is_active", true)
     .not("image_url", "is", null)
     .order("created_at", { ascending: false })
@@ -21,8 +27,11 @@ export default async function GatePage() {
     .returns<ProductImageRow[]>();
 
   const images: PolaroidImage[] = (data ?? [])
-    .filter((p): p is ProductImageRow & { image_url: string } => !!p.image_url)
-    .map((p) => ({ src: p.image_url, alt: p.name }));
+    .map((p) => {
+      const first = firstBySortOrder(p.product_images);
+      return first ? { src: mediaPath(first.id), alt: p.name } : null;
+    })
+    .filter((img): img is PolaroidImage => img !== null);
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-cream flex items-center justify-center px-6 py-16">

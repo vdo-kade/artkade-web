@@ -20,13 +20,33 @@ function normalizeVariants<T extends { edition_size: number | null }>(variants: 
   return variants.map((v) => ({ ...v, edition_size: normalizeEditionSize(v.edition_size) }));
 }
 
+// Every public-facing product photo (card thumbnail, detail-page gallery,
+// the gate page's decorative scatter) resolves to this rather than the raw
+// Supabase Storage URL -- see app/api/media/image/[id]/route.ts, which also
+// caps resolution before streaming. Keyed off product_images.id, not the
+// product's own id: products.image_url gets reassigned whenever the vendor
+// deletes/reorders the first gallery photo (app/vendor/actions.ts), but a
+// given product_images row's own url never changes in place, so its id is
+// the one thing safe to cache against forever.
+export function mediaPath(imageId: string): string {
+  return `/api/media/image/${imageId}`;
+}
+
+// products.image_url always mirrors whichever product_images row has the
+// lowest sort_order (see app/vendor/actions.ts) -- this is that same "which
+// row is first" resolution, shared by the card thumbnail, the detail-page
+// gallery's own image_url fallback, and the gate page's scatter, so all
+// three agree on which photo is "the" one for a product with several.
+export function firstBySortOrder<T extends { sort_order: number }>(rows: T[]): T | undefined {
+  return rows.length === 0 ? undefined : [...rows].sort((a, b) => a.sort_order - b.sort_order)[0];
+}
+
 type ProductRow = {
   id: string;
   artist_id: string;
   name: string;
   slug: string;
   category: string;
-  image_url: string | null;
   is_bestseller: boolean;
   is_one_off: boolean;
   sold_count: number;
@@ -42,6 +62,10 @@ type ProductRow = {
   // total ("open"), or nothing at all ("none", the pre-existing default).
   is_open_edition: boolean;
   product_variants: VariantRow[];
+  // id needed to build the card thumbnail's proxy path (see mediaPath);
+  // sort_order to pick the first one via firstBySortOrder. Not `url` --
+  // the card never needs the raw Storage URL at all now.
+  product_images: { id: string; sort_order: number }[];
 };
 
 type ArtistRow = {
@@ -63,7 +87,7 @@ export type ArtistWithProducts = ArtistRow & {
 // Shared select fragment so the landing page's flat product list and the
 // stall page's nested `artists.products` query stay in sync.
 export const PRODUCT_SELECT =
-  "id, artist_id, name, slug, category, image_url, is_bestseller, is_one_off, sold_count, sort_order, drop_ends_at, shared_stock_pool, is_exclusive_drop, is_open_edition, product_variants(id, label, price, stock, edition_size)";
+  "id, artist_id, name, slug, category, is_bestseller, is_one_off, sold_count, sort_order, drop_ends_at, shared_stock_pool, is_exclusive_drop, is_open_edition, product_variants(id, label, price, stock, edition_size), product_images(id, sort_order)";
 
 // Collective "N of M left" across every variant of a product -- the
 // aggregate the card badge (is_exclusive_drop) and the shared-pool stock
@@ -175,6 +199,7 @@ export function mapProduct(row: ProductRow, stallSlug: string, stallName: string
     row.is_open_edition && editionAggregate === undefined
       ? productStockTotal(row.shared_stock_pool, variants)
       : undefined;
+  const firstImage = firstBySortOrder(row.product_images);
   return {
     id: row.id,
     artistId: row.artist_id,
@@ -183,7 +208,7 @@ export function mapProduct(row: ProductRow, stallSlug: string, stallName: string
     stallName,
     name: row.name,
     category: row.category,
-    imageUrl: row.image_url ?? undefined,
+    imageUrl: firstImage ? mediaPath(firstImage.id) : undefined,
     priceLabel: formatPriceLabel(variants),
     sizeLabel: formatSizeLabel(row.category, variants),
     stockRemaining: productStockTotal(row.shared_stock_pool, variants),
@@ -317,7 +342,6 @@ type ProductDetailRow = {
   slug: string;
   description: string | null;
   category: string;
-  image_url: string | null;
   is_one_off: boolean;
   sold_count: number;
   drop_ends_at: string | null;
@@ -325,12 +349,12 @@ type ProductDetailRow = {
   shared_stock_pool: boolean;
   is_open_edition: boolean;
   product_variants: VariantRow[];
-  product_images: { url: string; sort_order: number }[];
+  product_images: { id: string; sort_order: number }[];
   artists: { slug: string; name: string; is_active: boolean } | null;
 };
 
 const PRODUCT_DETAIL_SELECT =
-  "id, name, slug, description, category, image_url, is_one_off, sold_count, drop_ends_at, sizing_chart_url, shared_stock_pool, is_open_edition, product_variants(id, label, price, stock, edition_size), product_images(url, sort_order), artists(slug, name, is_active)";
+  "id, name, slug, description, category, is_one_off, sold_count, drop_ends_at, sizing_chart_url, shared_stock_pool, is_open_edition, product_variants(id, label, price, stock, edition_size), product_images(id, sort_order), artists(slug, name, is_active)";
 
 // Shared by both the real product page (app/stalls/[slug]/products/
 // [productSlug]/page.tsx) and its intercepted-route modal counterpart --
@@ -355,7 +379,7 @@ export async function getProductDetail(
 
   const gallery = [...data.product_images]
     .sort((a, b) => a.sort_order - b.sort_order)
-    .map((img) => ({ src: img.url, alt: data.name }));
+    .map((img) => ({ src: mediaPath(img.id), alt: data.name }));
 
   const variants = normalizeVariants(sortVariantsByPrice(data.product_variants));
   const sharedStock = data.shared_stock_pool ? computeEditionAggregate(data.shared_stock_pool, variants) : undefined;
@@ -374,7 +398,7 @@ export async function getProductDetail(
     soldCount: data.sold_count,
     dropEndsAt: data.drop_ends_at ?? undefined,
     sizingChartUrl: data.sizing_chart_url ?? undefined,
-    images: gallery.length > 0 ? gallery : data.image_url ? [{ src: data.image_url, alt: data.name }] : [],
+    images: gallery,
     variants: variants.map((v) => ({
       id: v.id,
       label: v.label,

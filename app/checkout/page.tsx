@@ -283,14 +283,30 @@ export default function CheckoutPage() {
                             element whose resting colour is var()-based and
                             theme-varying leaves it stuck at the pre-toggle
                             colour (see app/not-found.tsx's comment). Only the
-                            hover:bg-paper background needs to animate. */}
+                            hover:bg-paper background needs to animate.
+
+                            disabled:text-warm-grey, not disabled:opacity-30 --
+                            opacity blends the (theme-varying) ink colour
+                            toward whatever's actually behind it, which
+                            landed at 1.92:1 in light mode and 2.53:1 in
+                            dark, both under the 3:1 floor a customer needs
+                            to actually tell "−" is disabled at quantity 1
+                            (and "+" at max stock) rather than just not
+                            responding. warm-grey is a fixed token already
+                            confirmed at 3.34:1 (light) / 4.65:1 (dark)
+                            against the page canvas, so swapping the colour
+                            outright -- rather than fading the same colour
+                            toward the background -- holds >=3:1 in both
+                            themes without per-theme tuning, and still
+                            reads as a clear step down from the enabled
+                            state's full-strength ink. */}
                         <div className="flex items-center border border-line">
                           <button
                             type="button"
                             onClick={() => updateQuantity(bagItemKey(item), item.quantity - 1)}
                             disabled={item.quantity <= 1}
                             aria-label={`Decrease quantity of ${item.productName}`}
-                            className="w-7 h-7 flex items-center justify-center hover:bg-paper disabled:opacity-30 disabled:cursor-not-allowed transition-[background-color]"
+                            className="w-7 h-7 flex items-center justify-center hover:bg-paper disabled:text-warm-grey disabled:cursor-not-allowed transition-[background-color]"
                           >
                             −
                           </button>
@@ -301,7 +317,7 @@ export default function CheckoutPage() {
                             disabled={atMax}
                             title={atMax ? "No more in stock" : undefined}
                             aria-label={`Increase quantity of ${item.productName}`}
-                            className="w-7 h-7 flex items-center justify-center hover:bg-paper disabled:opacity-30 disabled:cursor-not-allowed transition-[background-color]"
+                            className="w-7 h-7 flex items-center justify-center hover:bg-paper disabled:text-warm-grey disabled:cursor-not-allowed transition-[background-color]"
                           >
                             +
                           </button>

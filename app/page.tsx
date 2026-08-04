@@ -178,7 +178,25 @@ export default async function LandingPage() {
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {STEPS.map((s) => (
             <div key={s.n} className="border border-dashed border-line p-5">
-              <span className="font-display text-3xl text-paper" style={{ WebkitTextStroke: "1.5px #1C1712" }}>
+              {/* Hairline serif numeral at this size and weight is carried
+                  almost entirely by the stroke, not the fill -- the
+                  interior fill area is too thin on its own to read as a
+                  digit. Previously a fixed text-paper fill + a hardcoded
+                  #1C1712 stroke: harmless in light mode (stroke reads dark
+                  against cream), but #1C1712 IS the dark-mode canvas
+                  colour (dark bg = light-mode ink, see app/globals.css),
+                  so the one thing actually defining the glyph's shape
+                  vanished into its own background. Both fill and stroke
+                  now read the same live --color-ink var instead: full
+                  opacity for the stroke (dark on cream / light on the
+                  dark canvas, always distinct from the page behind it),
+                  low opacity for the fill (quiet, close to the page in
+                  both themes, echoing what the fixed paper fill did on
+                  cream specifically). */}
+              <span
+                className="font-display text-3xl text-ink/10"
+                style={{ WebkitTextStroke: "1.5px rgb(var(--color-ink))" }}
+              >
                 {s.n}
               </span>
               <h3 className="font-medium mt-2 mb-1">{s.title}</h3>

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -14,6 +15,22 @@ import {
 } from "@/lib/catalogue";
 
 export const revalidate = 0;
+
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const supabase = await createClient();
+  const { data: artist } = await supabase
+    .from("artists")
+    .select("name, tagline")
+    .eq("slug", params.slug)
+    .eq("is_active", true)
+    .maybeSingle<{ name: string; tagline: string | null }>();
+  if (!artist) return {};
+  return {
+    title: `${artist.name} — Art Kade`,
+    description: artist.tagline ?? undefined,
+    alternates: { canonical: `/stalls/${params.slug}` },
+  };
+}
 
 export default async function StallPage({ params }: { params: { slug: string } }) {
   const supabase = await createClient();

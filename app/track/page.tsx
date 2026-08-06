@@ -1,6 +1,14 @@
+import type { Metadata } from "next";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import TrackForm from "./TrackForm";
+
+// Canonical always points at bare /track, not /track?order=... -- the
+// order number is a pre-fill convenience, not a distinct document.
+export const metadata: Metadata = {
+  title: "Track your order — Art Kade",
+  alternates: { canonical: "/track" },
+};
 
 // ?order= lets the checkout thank-you screen and the order-approved email
 // (see lib/email.ts) deep-link with the order number pre-filled -- the

@@ -5,6 +5,7 @@ import { MIN_ORDER_TOTAL } from "@/lib/checkout";
 
 export const metadata = {
   title: "FAQ — Art Kade",
+  alternates: { canonical: "/faq" },
 };
 
 const FAQS = [

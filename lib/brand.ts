@@ -16,7 +16,12 @@ export const SHORT_LOGO_URL =
 export const OG_IMAGE_URL =
   "https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/Site_assets/og-image.png";
 
-export const SITE_URL = "https://artkade.space";
+// www is the canonical host -- artkade.space (apex) 308-redirects here at
+// the DNS/Vercel domain level. Every absolute URL this app emits
+// (sitemap, robots' sitemap link, og:url, canonical tags, email links)
+// needs to already be on the canonical host, or crawlers/scrapers spend an
+// extra hop resolving a redirect on every single one.
+export const SITE_URL = "https://www.artkade.space";
 
 // v2 artwork carries its own baked-in black outline around every glyph
 // (unlike the v1 assets, whose neutral triangle-eye/wordmark elements were

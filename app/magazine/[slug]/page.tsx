@@ -34,6 +34,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   return {
     title: `${post.title} — Art Kade Magazine`,
     description: post.excerpt ?? undefined,
+    alternates: { canonical: `/magazine/${params.slug}` },
   };
 }
 

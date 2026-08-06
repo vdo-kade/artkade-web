@@ -38,9 +38,9 @@ export async function GET() {
 function csvEscape(value: string): string {
   // Standard CSV/formula-injection mitigation: a cell starting with =, +,
   // -, or @ can be interpreted as a formula by Excel/Sheets/etc when this
-  // file is opened -- email is free-text from the public gate form (see
-  // app/gate/actions.ts's submitBetaSignup), so nothing stops one from
-  // starting with any of those. Prefixing with a single quote forces it to
+  // file is opened -- these emails were free-text from the old pre-launch
+  // signup form, so nothing stops one from starting with any of those.
+  // Prefixing with a single quote forces it to
   // be read as literal text, same as typing a leading apostrophe directly
   // into a spreadsheet cell. This runs before the existing comma/quote/
   // newline quoting below, which is a separate concern (CSV field parsing,

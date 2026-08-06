@@ -51,15 +51,18 @@ const SITE_DESCRIPTION =
   "Kade means shop. Art Kade is where Vdokade, Nuwan Shilpa and future artists release limited-drop prints, stickers and merch.";
 
 // Site-wide default -- every page inherits this unless it sets its own
-// `metadata` export (none currently do). This is also what a link-preview
-// crawler (WhatsApp, Facebook, etc) sees even for a bare "/" link: the
-// site-wide gate (middleware.ts) redirects an anonymous request to /gate,
-// but /gate is wrapped by this same root layout, so the branded OG tags
-// still render there rather than the crawler landing on nothing.
+// `metadata` export. This is also what a link-preview crawler (WhatsApp,
+// Facebook, etc) sees for a bare "/" link.
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
+  // Base canonical for any page that doesn't set its own via its own
+  // metadata/generateMetadata export -- resolved against metadataBase
+  // above, so this becomes SITE_URL itself. Pages with their own distinct
+  // URL (stalls, products, magazine posts, etc) override this with their
+  // own `alternates.canonical` so they don't all point back at "/".
+  alternates: { canonical: "/" },
   openGraph: {
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,

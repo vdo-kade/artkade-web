@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import FreebieCard from "@/components/FreebieCard";
@@ -5,6 +6,11 @@ import { createClient } from "@/lib/supabase-server";
 import { FREEBIE_SELECT, mapFreebie, type FreebieRow } from "@/lib/freebies";
 
 export const revalidate = 0;
+
+export const metadata: Metadata = {
+  title: "Freebies — Art Kade",
+  alternates: { canonical: "/freebies" },
+};
 
 type ArtistWithFreebiesRow = {
   slug: string;

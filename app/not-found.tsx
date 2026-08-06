@@ -23,8 +23,7 @@ export default function NotFound() {
         </p>
         {/* Only the solid button is pinned -- an outline button has no
             fill of its own to read against, so it needs to flip with the
-            page rather than stay fixed-dark (see app/gate/page.tsx's
-            "Ask to Enter" for the same reasoning). Pinning the whole
+            page rather than stay fixed-dark. Pinning the whole
             wrapper here would cascade into the outline button too and
             leave it dark-on-dark. The outline button also drops
             transition-colors (confirmed live): an element whose resting

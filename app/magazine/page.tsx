@@ -1,9 +1,15 @@
+import type { Metadata } from "next";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import MagazineCard, { MagazinePost } from "@/components/MagazineCard";
 import { createClient } from "@/lib/supabase-server";
 
 export const revalidate = 0;
+
+export const metadata: Metadata = {
+  title: "Magazine — Art Kade",
+  alternates: { canonical: "/magazine" },
+};
 
 type PostRow = {
   slug: string;

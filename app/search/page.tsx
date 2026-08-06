@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SearchForm from "@/components/SearchForm";
@@ -7,6 +8,14 @@ import { createClient } from "@/lib/supabase-server";
 import { PRODUCT_SELECT, mapProduct, mapStall } from "@/lib/catalogue";
 
 export const revalidate = 0;
+
+// Canonical always points at the bare /search, not /search?q=... -- every
+// query string is the same page with different results, not a distinct
+// document worth indexing on its own.
+export const metadata: Metadata = {
+  title: "Search — Art Kade",
+  alternates: { canonical: "/search" },
+};
 
 type SearchProductRow = Parameters<typeof mapProduct>[0] & { artists: { slug: string; name: string } };
 

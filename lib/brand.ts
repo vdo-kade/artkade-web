@@ -22,6 +22,15 @@ export const SHORT_LOGO_URL =
 // a real browser rather than reimplemented in a different image pipeline.
 // Static, not per-page dynamic: nothing here changes per product/stall, so
 // one shared image covers every link.
+// Stays PNG, not WebP: this is the one image on the site next/image never
+// touches (fed straight to <meta property="og:image">, fetched by each
+// platform's own scraper, not the browser) -- Slack and Discord in
+// particular are known to mishandle WebP og:images, and there's no Accept
+// negotiation possible with a scraper the way there is with a browser.
+// Palette-quantized PNG instead: 118KB vs the original 322KB truecolor
+// PNG, same file, same URL (compressed in place in Storage, so this
+// constant didn't need to change) -- confirmed no visible banding on the
+// soft drop-shadow despite the reduced color count.
 export const OG_IMAGE_URL =
   "https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/Site_assets/og-image.png";
 

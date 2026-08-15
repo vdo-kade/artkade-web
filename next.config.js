@@ -21,6 +21,20 @@ const nextConfig = {
     // catalogue photos are edited occasionally (vendor "replace photo"),
     // not the kind of image that needs sub-hour freshness.
     minimumCacheTTL: 60 * 60 * 24 * 7,
+    // Vercel's Image Optimization has its own separate monthly quota
+    // (distinct from Supabase's), billed per unique source+width
+    // transformation. app/api/media/image/[id]/route.ts's URL (keyed off
+    // product_images.id rather than the raw Storage URL) is a new cache
+    // key from next/image's optimizer's point of view, so shipping it
+    // forced every catalogue photo to re-transform at every responsive
+    // width at once -- that's what burned through the quota and started
+    // returning 402/404 on every image next/image hadn't already cached
+    // (2026-08-15 outage). Disabling the optimizer entirely sidesteps that
+    // quota altogether: the proxy above already caps every photo at 1400px
+    // server-side with sharp, so this only costs the WebP/AVIF
+    // re-encoding and responsive srcset next/image would otherwise add on
+    // top -- not the master-protection resizing itself.
+    unoptimized: true,
   },
   experimental: {
     // Server Actions default to a 1MB request body limit -- fine for the

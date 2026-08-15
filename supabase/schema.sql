@@ -13,6 +13,22 @@
 -- carries { role: "vendor", artist_id: "<this table's id>" }, set via the
 -- Auth Admin API the same way the admin account's { role: "admin" } was
 -- set. See middleware.ts and lib/session-role.ts.
+--
+-- Two more roles live in that same app_metadata.role, neither with a
+-- column here (they're Auth metadata, not DB state, so there's nothing
+-- to create -- noted here only so rebuilding from scratch doesn't miss
+-- them):
+--   - "restricted_admin": reads everywhere "admin" does (/admin/* and
+--     /vendor/*, the latter to browse any stall's dashboard) but is
+--     denied write access to catalogue/stall data by the server actions
+--     themselves, not by this route gate -- see middleware.ts.
+--   - app_metadata.must_change_password (boolean, any role): sits
+--     alongside role rather than being its own role. A vendor or
+--     restricted_admin account created via TempPasswordReveal (see
+--     app/admin/vendors/create/route.ts and app/admin/staff/create/
+--     route.ts) carries this until they set a real password --
+--     middleware.ts redirects them to /vendor/change-password until
+--     it's cleared by changePassword in app/vendor/actions.ts.
 create table artists (
   id uuid primary key default gen_random_uuid(),
   slug text unique not null,               -- e.g. 'vdokade', 'nuwan-shilpa'
@@ -126,6 +142,16 @@ create table product_variants (
   price numeric(10,2) not null,
   stock int not null default 0, -- null/omit stock tracking for digital & freebies
   is_active boolean not null default true,
+  -- Exists live but dead: no app code reads or writes it (grepped the
+  -- whole repo, zero hits), and every one of the 145 live rows has it
+  -- null. Looks like scaffolding for a bundled-sticker-pack concept that
+  -- was never finished -- product_variants' own comment above already
+  -- says explicitly "there is no bundle/pack concept" for stickers today.
+  -- Documented here so schema.sql stops silently omitting a real column,
+  -- not because it's actually in use -- a real candidate for `alter
+  -- table product_variants drop column pack_size` whenever someone
+  -- confirms nothing depends on it.
+  pack_size int,
   -- Nullable: null means "not physically shipped" (digital/freebie) or an
   -- unrecognized print size that was never backfilled. Defaulted by
   -- category/size (see lib/shipping.ts's defaultWeightGrams) both in the
@@ -155,6 +181,33 @@ create table product_images (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references products(id) on delete cascade,
   url text not null,
+  sort_order int not null default 0
+);
+
+-- Exists live, entirely undocumented until this reconciliation pass, and
+-- dead: zero rows, and no app code references this table at all (grepped
+-- the whole repo). Reads like an abandoned prototype for a per-artist
+-- reusable sticker-design library, separate from `products` -- there's a
+-- matching sticker-designs/sticker-crud-test-* path in Storage full of
+-- empty placeholder uploads from whatever testing produced this, which
+-- is the only other trace of it anywhere. RLS is confirmed enabled live
+-- with no policies (same pattern as offline_sales/stall_collaborators --
+-- verified with an anon-key insert probe returning 42501, not a
+-- constraint error). A real candidate for `drop table sticker_designs`
+-- rather than building this out, unless someone specifically wants to
+-- pick the feature back up.
+--
+-- artist_id's `on delete cascade` below mirrors every other artist_id FK
+-- in this file for consistency -- not independently confirmed against
+-- the live constraint definition (this table's real FK behavior wasn't
+-- checked via pg_catalog), so treat it as a best guess, not a verified
+-- fact, if it ever matters.
+create table sticker_designs (
+  id uuid primary key default gen_random_uuid(),
+  artist_id uuid not null references artists(id) on delete cascade,
+  name text not null,
+  image_url text,
+  is_active boolean not null default true,
   sort_order int not null default 0
 );
 
@@ -198,6 +251,13 @@ create table order_items (
   order_id uuid not null references orders(id) on delete cascade,
   product_id uuid not null references products(id),
   variant_id uuid references product_variants(id),
+  -- Exists live but dead, same story as product_variants.pack_size above:
+  -- no app code reference (grepped the whole repo), and there are
+  -- currently zero order_items rows at all live to check for non-null
+  -- values against. Likely paired scaffolding for the same unfinished
+  -- bundled-sticker-pack concept. Flag for removal once confirmed unused,
+  -- same as pack_size.
+  sticker_pack_selection jsonb,
   quantity int not null default 1,
   unit_price numeric(10,2) not null
 );
@@ -385,10 +445,19 @@ create index if not exists idx_beta_signups_created_at on beta_signups(created_a
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- Visitors (anon key) can only READ active/published catalogue data.
--- Orders can be INSERTED by anon (a customer placing an order) but never
--- read back or edited by anon -- only staff, via the service role key,
--- can review/approve/update orders. Wire the dashboard's server actions
--- to use the service role key (kept server-side only, see .env.local.example).
+-- Orders/order_items are NOT anon-insertable, despite how this originally
+-- shipped -- checkout used to insert straight from the browser via the
+-- anon client (with check (true) on both tables), trusting whatever
+-- price/total the client's own localStorage-backed bag state claimed.
+-- That's a real hole: anyone hitting the Supabase REST API directly with
+-- the (public) anon key could place an order at an arbitrary price,
+-- bypassing the app entirely. Fixed by moving order creation into
+-- app/checkout/actions.ts's placeOrder, a server action that uses the
+-- service-role client and re-derives price/total/stock from the DB
+-- instead of trusting the client -- and by dropping the anon insert
+-- policies live to close the direct-API path too. There is now no anon
+-- policy of any kind on orders/order_items/order_status_history; only
+-- the service role key (which bypasses RLS) can read or write them.
 -- ============================================================
 alter table artists enable row level security;
 alter table products enable row level security;
@@ -402,6 +471,7 @@ alter table order_status_history enable row level security;
 alter table offline_sales enable row level security;
 alter table stall_collaborators enable row level security;
 alter table beta_signups enable row level security;
+alter table sticker_designs enable row level security;
 
 create policy "public can read active artists" on artists
   for select using (is_active);
@@ -435,24 +505,23 @@ create policy "public can read freebies" on freebies
 create policy "public can read published magazine posts" on magazine_posts
   for select using (published);
 
-create policy "anyone can place an order" on orders
-  for insert with check (true);
-
-create policy "anyone can add items to their own order" on order_items
-  for insert with check (true);
-
--- Write-only for anon, same reasoning as orders above: no select policy
--- means RLS blocks reads entirely for anyone but the service role, so
--- collected emails are never publicly readable even though anyone can
--- submit one.
+-- Write-only for anon (unlike orders/order_items below, which are closed
+-- to anon entirely): no select policy means RLS blocks reads for anyone
+-- but the service role, so collected emails are never publicly readable
+-- even though anyone can submit one. Safe to leave this one genuinely
+-- anon-insertable -- worst case is spam rows in a lead-capture table, not
+-- a forged price/order the way an open orders policy was.
 create policy "anyone can submit a beta signup" on beta_signups
   for insert with check (true);
 
--- No select/update/delete policies are created for orders/order_items/
--- order_status_history on purpose: without a policy, RLS blocks the
--- action entirely for the anon key. Only the service role key (which
--- bypasses RLS) can read or update them -- that's what the admin
--- dashboard's server-side code should use.
+-- No policies at all -- insert included -- are created for orders/
+-- order_items/order_status_history, on purpose: without a policy, RLS
+-- blocks every action entirely for the anon key. Only the service role
+-- key (which bypasses RLS) can read or write them -- that's what
+-- app/checkout/actions.ts's placeOrder and the admin dashboard's server
+-- actions both use. (This table used to carry an anon insert policy --
+-- see this file's own git history, or the ROW LEVEL SECURITY section
+-- comment above, for why it was dropped.)
 
 -- ============================================================
 -- OPS: FREE-TIER USAGE MONITORING

@@ -21,55 +21,70 @@ insert into artists (slug, name, tagline, accent_color, is_active, sort_order, l
 -- A few filenames (cop-computer, cop-hand-up, sir-office-chair) read badly
 -- as product names as-is, so those are lightly reworded; the rest are kept
 -- close to the source filename.
+--
+-- slug is required (products.slug is not-null, no default -- this file
+-- originally omitted it entirely and failed outright on a fresh run) --
+-- values below are the real live slugs (app/vendor/actions.ts's slugify,
+-- lib/slug.ts), not freshly re-derived from these names, so a reseed
+-- lines up with the URLs product/product_images pages elsewhere already
+-- link to.
 with v as (select id from artists where slug = 'vdokade')
-insert into products (artist_id, category, name, is_bestseller, sort_order, image_url)
-select v.id, 'sticker_pack', x.name, x.is_bestseller, x.sort_order, x.image_url
+insert into products (artist_id, category, name, slug, is_bestseller, sort_order, image_url)
+select v.id, 'sticker_pack', x.name, x.slug, x.is_bestseller, x.sort_order, x.image_url
 from v, (values
-  ('Premasiri', true, 1,
+  ('Premasiri', 'premasiri', true, 1,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/premasiri.png'),
-  ('Ammi Ammi Ammi', false, 2,
+  ('Ammi Ammi Ammi', 'ammi-ammi-ammi', false, 2,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/ammi-ammi-ammi.png'),
-  ('Duca', false, 3,
+  ('Duca', 'duca', false, 3,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/duca.png'),
-  ('Kesel Gedi', false, 4,
+  ('Kesel Gedi', 'kesel-gedi', false, 4,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/kesel-gedi.png'),
-  ('Oneriarchy', false, 5,
+  ('Oneriarchy', 'oneriarchy', false, 5,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/oneriarchal.png'),
-  ('Premasiri Thoo Modayek', false, 6,
+  ('Premasiri Thoo Modayek', 'premasiri-thoo-modayek', false, 6,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/premasiri-thoo-modayek.png'),
-  ('Ringtone', false, 7,
+  ('Ringtone', 'ringtone', false, 7,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/ringtone.png'),
-  ('Computer Cop', false, 9,
+  ('Computer Cop', 'computer-cop', false, 9,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/cop-computer.png'),
-  ('Cop Hands Up', false, 10,
+  ('Cop Hands Up', 'cop-hands-up', false, 10,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/cop-hand-up.png'),
-  ('Dad Standing', false, 11,
+  ('Dad Standing', 'dad-standing', false, 11,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/dad-standing.png'),
-  ('Prema Waving', false, 12,
+  ('Prema Waving', 'prema-waving', false, 12,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/prema-waving.png'),
-  ('Sir In The Office Chair', false, 13,
+  ('Sir In The Office Chair', 'sir-in-the-office-chair', false, 13,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/sir-office-chair.png'),
-  ('Susie Carries Prema', false, 14,
+  ('Susie Carries Prema', 'susie-carries-prema', false, 14,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/susie-carries-prema.png'),
-  ('Susie Skydiver', false, 15,
+  ('Susie Skydiver', 'susie-skydiver', false, 15,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/susie-skydiver.png'),
-  ('Baby', false, 16,
+  ('Baby', 'baby', false, 16,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/baby.png'),
-  ('Balla', false, 17,
+  ('Balla', 'balla', false, 17,
     'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Stickers/balla.png')
-) as x(name, is_bestseller, sort_order, image_url);
+) as x(name, slug, is_bestseller, sort_order, image_url);
 
--- Vdokade print -- uses the dedicated A3 poster artwork.
+-- Vdokade print -- uses the dedicated A3 poster artwork. slug is the real
+-- live one (susanthika-premasiri-print) -- the product was since renamed
+-- to "Susie Splosion" live, but slugs are set once at creation and never
+-- regenerated on a later rename (lib/slug.ts), so the slug is still this
+-- even though the name has moved on. Kept the original name here rather
+-- than following that rename: this file is the original seed data, not a
+-- live mirror of every subsequent catalogue edit.
 with v as (select id from artists where slug = 'vdokade')
-insert into products (artist_id, category, name, sort_order, image_url)
-select v.id, 'print', 'Susanthika & Premasiri Print', 8,
+insert into products (artist_id, category, name, slug, sort_order, image_url)
+select v.id, 'print', 'Susanthika & Premasiri Print', 'susanthika-premasiri-print', 8,
   'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/vdo_media/Prints/a3%20Poster%20-%20VDO-%2006-01-2026.png'
 from v;
 
--- Shilpa Kade collab print.
+-- Shilpa Kade collab print. slug is the real live one
+-- (chronos-couples-chaos, without "-v2" -- same "slug predates a later
+-- name edit" situation as the print above).
 with s as (select id from artists where slug = 'shilpa-kade')
-insert into products (artist_id, category, name, sort_order, image_url)
-select s.id, 'print', 'Chronos Couples & Chaos v2', 1,
+insert into products (artist_id, category, name, slug, sort_order, image_url)
+select s.id, 'print', 'Chronos Couples & Chaos v2', 'chronos-couples-chaos', 1,
   'https://knetfofbdjsthqienegg.supabase.co/storage/v1/object/public/media/shilpa_kade_media/Chronos,Couples%20&%20Chaos%20%20v2%20-%20Nuwanshilpa%20x%20Vdokade%20Collab%20print.png'
 from s;
 

@@ -112,8 +112,8 @@ export default async function LandingPage() {
         <Image
           src={LOGO_URL}
           alt="Art Kade"
-          width={1522}
-          height={478}
+          width={1200}
+          height={377}
           sizes="(min-width: 768px) 501px, (min-width: 640px) 400px, 300px"
           priority
           className="mx-auto h-24 sm:h-32 md:h-40 w-auto mb-8"

@@ -63,8 +63,8 @@ export default function Header() {
           <Image
             src={SHORT_LOGO_URL}
             alt="Art Kade"
-            width={844}
-            height={767}
+            width={200}
+            height={182}
             sizes="48px"
             priority
             className="h-9 w-auto"

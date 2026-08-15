@@ -67,8 +67,8 @@ export default function Footer() {
           <Image
             src={LOGO_URL}
             alt="Art Kade"
-            width={1522}
-            height={478}
+            width={1200}
+            height={377}
             sizes="160px"
             className="h-9 w-auto"
             style={{ filter: LOGO_SHADOW_FILTER }}

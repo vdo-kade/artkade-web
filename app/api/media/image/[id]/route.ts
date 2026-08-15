@@ -29,6 +29,30 @@ import { createClient } from "@/lib/supabase-server";
 //    what leaves this route.
 const MAX_DIMENSION = 1400;
 
+// Vercel's own Image Optimization (next/image's /_next/image) is what used
+// to do format conversion in front of this route -- disabled site-wide
+// (next.config.js's unoptimized:true) after it hit its account-level quota
+// and started 402/404ing every image on 2026-08-15. With it gone, this
+// route is the only place left that can pick a smaller format, so it does
+// its own content negotiation on the Accept header rather than hardcoding
+// WebP -- a client that never sends "image/webp" (old browser, curl, a
+// bot) still gets a real image back instead of a format it can't decode.
+// AVIF isn't offered: meaningfully slower to encode per request for a
+// marginal size win over WebP at this quality, and every WebP-capable
+// client base already overlaps almost entirely with AVIF-capable ones.
+const WEBP_QUALITY = 82;
+const JPEG_QUALITY = 82;
+
+function pickFormat(acceptHeader: string, hasAlpha: boolean): "webp" | "jpeg" | "png" {
+  if (acceptHeader.includes("image/webp")) return "webp";
+  // JPEG can't represent transparency at all (no alpha channel) -- falling
+  // back to it for an alpha-bearing source (stickers, logos, anything with
+  // a transparent background) would flatten it onto an opaque fill and
+  // visibly break the image, not just shrink it. PNG is the safe fallback
+  // there; only non-alpha sources fall back to JPEG.
+  return hasAlpha ? "png" : "jpeg";
+}
+
 // Safe to cache this aggressively (Cache-Control below): product_images.url
 // is immutable for a given row id -- every product_images mutation in
 // app/vendor/actions.ts either inserts a new row or deletes one outright,
@@ -46,7 +70,7 @@ const MAX_DIMENSION = 1400;
 // to products/artists' own is_active here keeps a delisted product's photo
 // from staying reachable forever through this route after the raw
 // Storage URL would otherwise be the only thing keeping it alive.
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const supabase = await createClient();
   const { data: image } = await supabase
     .from("product_images")
@@ -63,20 +87,70 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 
   const original = Buffer.from(await upstream.arrayBuffer());
-  let resized: Buffer;
+  const originalContentType = upstream.headers.get("content-type") ?? "application/octet-stream";
+
+  let body: Buffer;
+  let contentType: string;
   try {
-    resized = await sharp(original)
-      .resize({ width: MAX_DIMENSION, height: MAX_DIMENSION, fit: "inside", withoutEnlargement: true })
-      .toBuffer();
+    const originalMeta = await sharp(original).metadata();
+    const format = pickFormat(req.headers.get("accept") ?? "", originalMeta.hasAlpha ?? false);
+
+    let pipeline = sharp(original).resize({
+      width: MAX_DIMENSION,
+      height: MAX_DIMENSION,
+      fit: "inside",
+      withoutEnlargement: true,
+    });
+    pipeline =
+      format === "webp"
+        ? pipeline.webp({ quality: WEBP_QUALITY })
+        : format === "jpeg"
+          ? pipeline.jpeg({ quality: JPEG_QUALITY })
+          : pipeline.png({ compressionLevel: 9 });
+
+    const { data: encoded, info } = await pipeline.toBuffer({ resolveWithObject: true });
+
+    // The bug this guards against: a source already at/under MAX_DIMENSION
+    // isn't resized at all (fit:"inside" + withoutEnlargement is a no-op on
+    // it), so the only thing that happened is a re-encode -- and sharp's
+    // default PNG encoder produces a larger file than some already-
+    // optimized source PNGs (confirmed live: a 1.66MB indexed-palette
+    // master came back as a 2.4MB truecolor+alpha re-encode). Re-encoding
+    // only ever has a chance of being smaller; it should never ship a
+    // bigger response than doing nothing would have. This check only
+    // applies when no real downscale happened -- a genuinely oversized
+    // master (the print-quality masters this route exists to cap) always
+    // ships the resized/re-encoded version regardless of relative byte
+    // count, because serving the untouched original there would leak
+    // exactly the full-resolution file this route is meant to prevent.
+    const wasResized = info.width !== originalMeta.width || info.height !== originalMeta.height;
+    if (!wasResized && encoded.length >= original.length) {
+      body = original;
+      contentType = originalContentType;
+    } else {
+      body = encoded;
+      contentType = `image/${format}`;
+    }
   } catch (err) {
     console.error("Failed to resize product image:", err);
     return new NextResponse("Failed to process image", { status: 502 });
   }
 
-  return new NextResponse(new Uint8Array(resized), {
+  return new NextResponse(new Uint8Array(body), {
     headers: {
-      "Content-Type": upstream.headers.get("content-type") ?? "application/octet-stream",
+      "Content-Type": contentType,
       "Cache-Control": "public, max-age=31536000, immutable",
+      // The response body now depends on the request's Accept header
+      // (webp vs. jpeg/png), not just the URL -- Vary tells any cache
+      // sitting in front of a shared client (a corporate proxy, another
+      // CDN) to key on that too. Doesn't multiply anything stored on our
+      // side: this route has no server-side cache of its own keyed by
+      // URL, only the year-long immutable Cache-Control above, which is
+      // the requesting browser's own per-client cache -- Vary just keeps
+      // that browser's cache honest if its own Accept header ever changes
+      // (e.g. a browser update that adds WebP support), it doesn't create
+      // new storage anywhere.
+      Vary: "Accept",
     },
   });
 }

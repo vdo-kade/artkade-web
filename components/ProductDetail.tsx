@@ -31,11 +31,23 @@ export default function ProductDetail({ product }: { product: ProductDetailData 
       />
       <div className="grid md:grid-cols-2 gap-8 md:gap-12">
         <div className="light-surface">
+          {/* This page's own container is `max-w-5xl` (1024px) with no
+              side padding of its own -- ProductDetail's outer wrapper
+              (`p-6 sm:p-10`) supplies that, so the real slot is real-
+              container-width minus that padding, then halved by the
+              `md:grid-cols-2 md:gap-12` two-column layout once md (768px)
+              hits. >=1024px it's a fixed 448px (container caps at 1024,
+              so (1024 - 80 padding - 48 gap)/2 stops growing); 768-1024px
+              it's calc(50vw - 64px); below 768px there's no second column
+              yet, so it's the full padded width: calc(100vw - 80px) once
+              sm's 40px padding kicks in at 640px, calc(100vw - 48px)
+              below that on 24px padding. Same "real slot, not a guess"
+              reasoning as ExpandableImage's own default sizes. */}
           <ExpandableImage
             images={product.images}
             frameClassName="bg-paper flex items-center justify-center overflow-hidden"
             placeholder={<span className="text-warm-grey text-xs font-mono">photo coming soon</span>}
-            sizes="(min-width: 768px) 480px, 90vw"
+            sizes="(min-width: 1024px) 448px, (min-width: 768px) calc(50vw - 64px), (min-width: 640px) calc(100vw - 80px), calc(100vw - 48px)"
             protectImage
           />
         </div>

@@ -31,12 +31,29 @@ export type ExpandableImageItem = { src: string; alt: string };
 // product and magazine post has exactly one image_url in the DB, so every
 // call site passes a single-item array, but the component itself doesn't
 // assume that.
+// Default matches the real rendered slot in every card grid this feeds
+// (ProductCard, FreebieCard -- both sit in the same `grid gap-6
+// sm:grid-cols-2 lg:grid-cols-4` inside a `max-w-6xl px-6` container,
+// with the card's own `p-3` (12px) padding around the image on every
+// side), not an approximation: at >=1152px the container itself caps out
+// at 1152px, so the 4-col slot is a fixed 234px ((1152-48 container
+// padding-72 gaps)/4 - 24 card padding); between 1024-1152px it's
+// calc(25vw - 54px) (same math, viewport-driven before the cap applies);
+// between 640-1024px (2 columns) it's calc(50vw - 60px); below 640px
+// (1 column) it's calc(100vw - 72px). Get this wrong and srcset still
+// "works" (the browser just rounds up to the next candidate width in
+// next.config.js's imageSizes/deviceSizes), but rounds up by more than
+// it needs to -- this was previously a flat "260px/45vw/90vw" guess,
+// off by enough at the 90vw tier specifically (true mobile need is ~318px
+// at a 390px viewport, not the guessed ~351px) to cross a whole srcset
+// breakpoint at 2x device pixel ratio (960px candidate selected instead
+// of 640px).
 export default function ExpandableImage({
   images,
   className,
   frameClassName,
   placeholder,
-  sizes = "(min-width: 1024px) 260px, (min-width: 640px) 45vw, 90vw",
+  sizes = "(min-width: 1152px) 234px, (min-width: 1024px) calc(25vw - 54px), (min-width: 640px) calc(50vw - 60px), calc(100vw - 72px)",
   linkHref,
   linkScroll = true,
   priority,

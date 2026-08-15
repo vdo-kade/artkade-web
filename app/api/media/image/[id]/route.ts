@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { createClient } from "@/lib/supabase-server";
+import { RESPONSIVE_IMAGE_WIDTHS } from "@/lib/mediaWidths";
 
 // Public catalogue photos are routed through here rather than straight at
 // Supabase Storage's public URL -- the same class of gap already fixed for
@@ -28,6 +29,24 @@ import { createClient } from "@/lib/supabase-server";
 //    viewing size. The original stays untouched in Storage; this only caps
 //    what leaves this route.
 const MAX_DIMENSION = 1400;
+
+// The only widths this route will ever resize to on request (via ?w=) --
+// see lib/mediaWidths.ts, shared with components/SelfHealingImage.tsx so
+// the two can't drift apart. Fixed, small whitelist rather than accepting
+// arbitrary values for two reasons: an arbitrary ?w= would fragment this
+// route's otherwise-simple "one immutable file per id (times format)"
+// cache story into a combinatorial "per id, per format, per exact pixel
+// width" one, and without a cap, ?w= would itself become a way to ask for
+// more than MAX_DIMENSION -- resolveTargetWidth below still clamps
+// regardless, but not accepting the value in the first place is the
+// simpler guarantee.
+function resolveTargetWidth(param: string | null): number {
+  if (param) {
+    const parsed = Number(param);
+    if ((RESPONSIVE_IMAGE_WIDTHS as readonly number[]).includes(parsed)) return parsed;
+  }
+  return MAX_DIMENSION;
+}
 
 // Vercel's own Image Optimization (next/image's /_next/image) is what used
 // to do format conversion in front of this route -- disabled site-wide
@@ -88,6 +107,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   const original = Buffer.from(await upstream.arrayBuffer());
   const originalContentType = upstream.headers.get("content-type") ?? "application/octet-stream";
+  const targetWidth = resolveTargetWidth(req.nextUrl.searchParams.get("w"));
 
   let body: Buffer;
   let contentType: string;
@@ -95,8 +115,21 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const originalMeta = await sharp(original).metadata();
     const format = pickFormat(req.headers.get("accept") ?? "", originalMeta.hasAlpha ?? false);
 
+    // height is always the MAX_DIMENSION constant, never targetWidth --
+    // fit:"inside" fits the source within a width x height box, so
+    // setting height to whatever width was requested would make a
+    // ?w=200 request on a portrait source come back short of 200px
+    // *wide* (the box would cap height at 200 first, on a source where
+    // width is the smaller dimension). Decoupling them means the
+    // requested width is always what's honored for a normal-ish image
+    // (matching the "200w" srcset descriptor components/
+    // SelfHealingImage.tsx declares for it), while MAX_DIMENSION still
+    // catches the one case that actually needs a height cap: an extreme
+    // portrait source at the *default* (no ?w=) request, where this
+    // reduces to exactly the original single-cap behavior since
+    // targetWidth itself defaults to MAX_DIMENSION.
     let pipeline = sharp(original).resize({
-      width: MAX_DIMENSION,
+      width: targetWidth,
       height: MAX_DIMENSION,
       fit: "inside",
       withoutEnlargement: true,

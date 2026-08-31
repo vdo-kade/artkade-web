@@ -13,6 +13,7 @@ import { uploadStallPhotoFile, uploadValidatedFreebieFile, type PhotoField } fro
 import { validateUpload, type UploadValidationResult } from "@/lib/image-validation";
 import { runPopupLifecycleTick } from "@/lib/popup-expiry";
 import { isValidHexColor, isAccentColorReadable, MIN_ACCENT_CONTRAST, CREAM_BACKGROUND } from "@/lib/color";
+import { normalizeStyledText, normalizeStyledTextOrNull } from "@/lib/text-normalize";
 import type { ActionState } from "@/lib/action-state";
 
 // Fixed number of label/url row pairs the stall-settings form renders for
@@ -124,12 +125,16 @@ export async function updateStallDetails(formData: FormData): Promise<ActionStat
       ? new Date(popupEndsAtRaw).toISOString()
       : null;
 
+  // Normalized here at save time (NFKC -- see lib/text-normalize.ts), not
+  // on render: catches "Instagram bio font" styled Unicode (tofu boxes in
+  // our serif face) the moment a vendor or admin pastes it, rather than
+  // needing every render path to remember to call it.
   const { error } = await supabase
     .from("artists")
     .update({
-      name,
-      tagline: typeof tagline === "string" ? tagline : null,
-      bio: typeof bio === "string" ? bio : null,
+      name: normalizeStyledText(name).trim(),
+      tagline: typeof tagline === "string" ? normalizeStyledTextOrNull(tagline) : null,
+      bio: typeof bio === "string" ? normalizeStyledTextOrNull(bio) : null,
       is_popup: isPopup,
       popup_starts_at: popupStartsAt,
       popup_ends_at: popupEndsAt,
@@ -308,6 +313,13 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
     return { ok: false, error: "You don't have permission to add products to this stall." };
   }
 
+  // Normalized here at save time (NFKC -- see lib/text-normalize.ts), not
+  // on render: catches "Instagram bio font" styled Unicode the moment a
+  // vendor pastes a product title/description, rather than needing every
+  // render path to remember to call it.
+  const normalizedName = normalizeStyledText(name).trim();
+  const normalizedDescription = typeof description === "string" ? normalizeStyledTextOrNull(description) : null;
+
   const variants: { label: string; price: number; stock: number }[] = [];
   for (let i = 0; i < MAX_VARIANT_ROWS; i++) {
     const label = formData.get(`variantLabel-${i}`);
@@ -365,15 +377,15 @@ export async function createProduct(formData: FormData): Promise<ActionState> {
     imageUrl = uploaded.url;
   }
 
-  const slug = await uniqueProductSlug(supabase, name.trim());
+  const slug = await uniqueProductSlug(supabase, normalizedName);
 
   const { data: product, error } = await supabase
     .from("products")
     .insert({
       artist_id: artistId,
-      name: name.trim(),
+      name: normalizedName,
       slug,
-      description: typeof description === "string" && description.trim() ? description.trim() : null,
+      description: normalizedDescription,
       category,
       image_url: imageUrl,
       is_one_off: isOneOff,
@@ -474,6 +486,13 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
     return { ok: false, error: "Choose a valid category." };
   }
 
+  // Normalized here at save time (NFKC -- see lib/text-normalize.ts), not
+  // on render: catches "Instagram bio font" styled Unicode the moment a
+  // vendor edits a product title/description, rather than needing every
+  // render path to remember to call it.
+  const normalizedName = normalizeStyledText(name).trim();
+  const normalizedDescription = typeof description === "string" ? normalizeStyledTextOrNull(description) : null;
+
   const supabase = createAdminClient();
 
   // Ownership is re-derived from the product's own artist_id, exactly like
@@ -515,8 +534,8 @@ export async function updateProduct(formData: FormData): Promise<ActionState> {
   const { error } = await supabase
     .from("products")
     .update({
-      name: name.trim(),
-      description: typeof description === "string" && description.trim() ? description.trim() : null,
+      name: normalizedName,
+      description: normalizedDescription,
       category,
       is_active: isActive,
       is_one_off: isOneOff,
@@ -729,6 +748,9 @@ export async function duplicateProduct(formData: FormData): Promise<ActionState>
   const name = formData.get("name");
   if (typeof productId !== "string") return { ok: false, error: "Missing product." };
   if (typeof name !== "string" || !name.trim()) return { ok: false, error: "Name is required." };
+  // Normalized here at save time (NFKC -- see lib/text-normalize.ts), same
+  // as createProduct/updateProduct.
+  const normalizedName = normalizeStyledText(name).trim();
 
   const supabase = createAdminClient();
   let ownerQuery = supabase
@@ -765,13 +787,13 @@ export async function duplicateProduct(formData: FormData): Promise<ActionState>
     .maybeSingle();
   const nextSortOrder = (maxSortRow?.sort_order ?? -1) + 1;
 
-  const slug = await uniqueProductSlug(supabase, name.trim());
+  const slug = await uniqueProductSlug(supabase, normalizedName);
 
   const { data: created, error } = await supabase
     .from("products")
     .insert({
       artist_id: source.artist_id,
-      name: name.trim(),
+      name: normalizedName,
       slug,
       // Deliberately blank, not copied: a duplicate is a new listing for
       // (usually) different artwork that happens to share the same size/

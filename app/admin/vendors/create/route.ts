@@ -5,6 +5,7 @@ import { getSessionRole } from "@/lib/session-role";
 import { slugify } from "@/lib/slugify";
 import { genTempPassword } from "@/lib/gen-password";
 import { uploadStallPhotoFile } from "@/lib/storage";
+import { normalizeStyledText, normalizeStyledTextOrNull } from "@/lib/text-normalize";
 
 // Deliberately placed under /admin/* (not /api/admin/*) so
 // middleware.ts's existing /admin/:path* matcher gates this route for
@@ -38,6 +39,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "A valid email is required." }, { status: 400 });
   }
 
+  // Normalized here at save time (NFKC -- see lib/text-normalize.ts): new
+  // vendors are the most likely source of "Instagram bio font" styled
+  // Unicode (tofu boxes in our serif face), since they're pasting a bio
+  // they already wrote elsewhere. Caught here, at creation, not on render.
+  const normalizedName = normalizeStyledText(name).trim();
+  const normalizedTagline = typeof tagline === "string" ? normalizeStyledTextOrNull(tagline) : null;
+  const normalizedBio = typeof bio === "string" ? normalizeStyledTextOrNull(bio) : null;
+
   // <input type="datetime-local"> submits local-time strings with no
   // timezone, same interpretation as app/vendor/actions.ts.
   const popupStartsAt =
@@ -56,7 +65,7 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = createAdminClient();
 
-    const baseSlug = slugify(name);
+    const baseSlug = slugify(normalizedName);
     let slug = baseSlug;
     for (let attempt = 2; ; attempt++) {
       const { data: existing } = await supabase.from("artists").select("id").eq("slug", slug).maybeSingle();
@@ -70,9 +79,9 @@ export async function POST(req: NextRequest) {
       .from("artists")
       .insert({
         slug,
-        name: name.trim(),
-        tagline: typeof tagline === "string" && tagline.trim() ? tagline.trim() : null,
-        bio: typeof bio === "string" && bio.trim() ? bio.trim() : null,
+        name: normalizedName,
+        tagline: normalizedTagline,
+        bio: normalizedBio,
         is_popup: true,
         is_active: isActive,
         popup_starts_at: popupStartsAt,

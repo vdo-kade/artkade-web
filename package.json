@@ -9,7 +9,10 @@
     "lint": "next lint",
     "check-usage": "node scripts/check-usage.js",
     "demo-vendor:create": "node scripts/demo-vendor.js create",
-    "demo-vendor:delete": "node scripts/demo-vendor.js delete"
+    "demo-vendor:delete": "node scripts/demo-vendor.js delete",
+    "test:text-normalize": "node --test scripts/text-normalize.test.mts",
+    "normalize-text:scan": "node scripts/normalize-existing-text.js scan",
+    "normalize-text:apply": "node scripts/normalize-existing-text.js apply"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",

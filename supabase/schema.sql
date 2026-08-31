@@ -59,7 +59,18 @@ create table artists (
   -- setting), rather than that category silently vanishing off the stall
   -- page.
   category_order text[],
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Marks a disposable demo/screenshot stall (e.g. a pitch-deck demo
+  -- account -- see scripts/demo-vendor.js) as opposed to a real vendor.
+  -- Purely a reporting-exclusion flag: it has no effect on RLS or the
+  -- public site (is_active above already fully controls visibility) --
+  -- scripts/export-catalogue.js is the one place today that filters on it,
+  -- since it's the only script that rolls catalogue data up into
+  -- cross-stall totals. Added 2026-08-31, see
+  -- supabase/2026-08-31-add-is-demo-flag.sql for the standalone migration
+  -- that applied this to the live DB (this file is the fresh-install
+  -- steady state, not itself run against an existing database).
+  is_demo boolean not null default false
 );
 
 -- Read-only cross-stall visibility for collab stalls (e.g. Shilpa Kade is a

@@ -59,18 +59,36 @@ async function main() {
     auth: { persistSession: false },
   });
 
-  const { data: artists, error: artistsError } = await supabase
-    .from("artists")
-    .select("id, name, slug")
-    .order("sort_order", { ascending: true });
-  if (artistsError) {
-    console.error("Failed to fetch artists:", artistsError.message);
-    process.exit(1);
+  // is_demo (added 2026-08-31, see supabase/2026-08-31-add-is-demo-flag.sql)
+  // flags disposable demo/screenshot stalls (e.g. a pitch-deck demo
+  // account) that must never inflate this script's cross-stall totals.
+  // Tolerates the column not existing yet (a fresh checkout that hasn't
+  // run that migration) by falling back to an unfiltered query rather than
+  // crashing -- this script just runs unfiltered in that case, same as
+  // before the flag existed.
+  let artists;
+  {
+    const withFlag = await supabase.from("artists").select("id, name, slug, is_demo").order("sort_order", { ascending: true });
+    if (withFlag.error && withFlag.error.code === "42703") {
+      console.warn("Note: artists.is_demo column doesn't exist yet -- demo stalls (if any) are NOT excluded from this export. Run supabase/2026-08-31-add-is-demo-flag.sql to enable exclusion.");
+      const noFlag = await supabase.from("artists").select("id, name, slug").order("sort_order", { ascending: true });
+      if (noFlag.error) {
+        console.error("Failed to fetch artists:", noFlag.error.message);
+        process.exit(1);
+      }
+      artists = noFlag.data;
+    } else if (withFlag.error) {
+      console.error("Failed to fetch artists:", withFlag.error.message);
+      process.exit(1);
+    } else {
+      artists = withFlag.data;
+    }
   }
 
+  const demoArtistIds = new Set(artists.filter((a) => a.is_demo).map((a) => a.id));
   const artistById = new Map(artists.map((a) => [a.id, a]));
 
-  const { data: products, error: productsError } = await supabase
+  const { data: productsRaw, error: productsError } = await supabase
     .from("products")
     .select(
       "id, artist_id, name, category, is_one_off, is_exclusive_drop, created_at, is_active"
@@ -79,6 +97,10 @@ async function main() {
   if (productsError) {
     console.error("Failed to fetch products:", productsError.message);
     process.exit(1);
+  }
+  const products = productsRaw.filter((p) => !demoArtistIds.has(p.artist_id));
+  if (productsRaw.length !== products.length) {
+    console.log(`Excluded ${productsRaw.length - products.length} product(s) belonging to demo stall(s) from this export.`);
   }
 
   const { data: variants, error: variantsError } = await supabase

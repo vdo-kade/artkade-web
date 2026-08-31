@@ -117,7 +117,29 @@ export default async function StallPage({ params }: { params: { slug: string } }
           return sections.map((section) => (
             <div key={section.title} className="mb-14">
               <h2 className="font-display text-2xl mb-6">{section.title}</h2>
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 items-start overflow-x-hidden">
+              {/* Deliberately no overflow-x-hidden here (removed 2026-09-02,
+                  see f7a9c37 for why it was added) -- it was only ever a
+                  defensive second layer against a few px of rotation
+                  overshoot from ProductCard's rotate-[-0.6deg] tilt, and
+                  min-w-0 on ProductCard's own root (still in place) already
+                  fully eliminates the real overflow that commit fixed. The
+                  defensive layer turned out to be actively harmful: per the
+                  CSS overflow spec, setting overflow-x to anything but
+                  visible forces the browser to compute overflow-y as auto
+                  too (confirmed -- explicitly setting overflow-y: visible
+                  afterward does NOT undo this), so that same few-px rotation
+                  overshoot -- now a real, if tiny, vertical scrollable
+                  overflow -- turned every one-row category grid into an
+                  accidentally-scrollable box that visibly showed an inner
+                  scrollbar and captured/latched the mouse wheel instead of
+                  letting it scroll the page. Same fix applied to the
+                  homepage's featured-drop grid and /search's results grid
+                  (identical className, identical cause) -- see the commit
+                  that added this comment. If a real horizontal-bleed need
+                  ever comes back, reach for overflow-hidden (both axes) on
+                  the offending element specifically, not overflow-x-hidden
+                  on a shared row wrapper. */}
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 items-start">
                 {section.products.map((p) => {
                   const priority = priorityRemaining > 0;
                   if (priority) priorityRemaining--;

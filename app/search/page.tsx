@@ -87,7 +87,14 @@ export default async function SearchPage({ searchParams }: { searchParams: { q?:
         {products.length > 0 && (
           <div>
             <h2 className="font-display text-2xl mb-6">Products</h2>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 items-start overflow-x-hidden">
+            {/* Deliberately no overflow-x-hidden -- see the matching comment
+                in app/stalls/[slug]/page.tsx for why: it forces overflow-y
+                to compute as auto too (CSS overflow-x/overflow-y coupling),
+                which turned this into an accidentally-scrollable box that
+                trapped the mouse wheel. min-w-0 on ProductCard's own root
+                already handles the real horizontal overflow this used to
+                guard against. */}
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 items-start">
               {products.map((p, i) => (
                 <ProductCard key={p.id} product={p} priority={i < PRIORITY_CARD_COUNT} />
               ))}

@@ -707,9 +707,17 @@ export default async function VendorDashboardPage({
       <AdminNav role={session.role} />
       <div style={{ padding: 24, fontFamily: "sans-serif", maxWidth: 720, margin: "0 auto" }}>
       {searchParams.created && <NewProductToast createdId={searchParams.created} />}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+      {/* Stacks on narrow screens (flex-col) instead of squeezing "Vdokade —
+          stall dashboard" / "Vendor Mode →" / "Log out" into flex-shrunk
+          slots that wrap word-by-word -- the title's own flex-basis had no
+          floor, so on a ~360px phone it lost the tug-of-war against the
+          actions cluster and wrapped across three lines. At sm+ (640px)
+          it's the original single baseline-aligned row; flex-wrap on the
+          actions cluster is a second line of defence even on wide screens
+          if a very long email address ever shows up. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between" style={{ marginBottom: 8 }}>
         <h1 style={{ fontSize: 24 }}>{artist.name} — stall dashboard</h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "#666" }}>
+        <div className="flex flex-wrap items-center gap-3" style={{ fontSize: 13, color: "#666" }}>
           {user?.email && <span>{user.email}</span>}
           {canManageCatalogue && <Link href={`/vendor/mode?artist=${artist.slug}`}>Vendor Mode &rarr;</Link>}
           <form action={logout}>
@@ -793,18 +801,27 @@ export default async function VendorDashboardPage({
           />
 
           <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>Accent colour</label>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          {/* Was one flex row: a 48x32 swatch vertically centred beside a
+              four-line paragraph, which left the swatch floating alone
+              against the paragraph's middle line on any narrow screen. Split
+              instead: a short caption stays paired with the swatch (the two
+              read as one short line together at any width), and the longer
+              contrast-rule explanation is its own full-width line below --
+              same "control, then a wrapping helper paragraph" pattern as
+              isOneOff's helper text elsewhere on this form. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <input
               type="color"
               name="accentColor"
               defaultValue={artist.accent_color ?? "#C08A2E"}
-              style={{ width: 48, height: 32, padding: 0, border: "1px solid #ccc" }}
+              style={{ width: 48, height: 32, padding: 0, border: "1px solid #ccc", flexShrink: 0 }}
             />
-            <span style={{ fontSize: 12, color: "#666" }}>
-              Shown on your stall card and page -- must contrast enough against the site's cream
-              background to stay readable, or saving will be rejected.
-            </span>
+            <span style={{ fontSize: 12, color: "#666" }}>Shown on your stall card and page.</span>
           </div>
+          <p style={{ fontSize: 12, color: "#999", marginBottom: 12 }}>
+            Must contrast enough against the site&apos;s cream background to stay readable, or saving
+            will be rejected.
+          </p>
 
           <label style={{ display: "block", margin: "8px 0", fontSize: 13 }}>
             <input type="checkbox" name="showSocialsInFooter" defaultChecked={artist.show_socials_in_footer} />{" "}
@@ -870,9 +887,19 @@ export default async function VendorDashboardPage({
         <ActionForm action={createProduct}>
           <input type="hidden" name="artistId" value={artist.id} />
           <label style={{ fontSize: 12, color: "#666" }}>Name</label>
-          <input style={inputStyle} name="name" required />
+          {/* This field arrived pre-filled with the STALL's own name
+              ("Vdokade") on a real Android phone -- turned out to be
+              DashboardTabs reusing this exact DOM input node from the
+              Personal-info tab's Name field (see the key={"{active}"} fix and
+              its comment in DashboardTabs.tsx for the real mechanism; it
+              was never browser autofill). autoComplete="off" here is just
+              defense-in-depth against a *real* browser autofill/value-
+              memory suggestion now that the field genuinely starts blank
+              -- it wasn't what fixed the original bug. Same reasoning on
+              Description below. */}
+          <input style={inputStyle} name="name" autoComplete="off" required />
           <label style={{ fontSize: 12, color: "#666" }}>Description</label>
-          <textarea style={{ ...inputStyle, minHeight: 70 }} name="description" />
+          <textarea style={{ ...inputStyle, minHeight: 70 }} name="description" autoComplete="off" />
           <label style={{ fontSize: 12, color: "#666" }}>Category</label>
           <select style={inputStyle} name="category" defaultValue={CATEGORY_ORDER[0]} required>
             {CATEGORY_ORDER.map((cat) => (
@@ -892,11 +919,22 @@ export default async function VendorDashboardPage({
           </p>
 
           <p style={{ fontSize: 13, marginBottom: 6 }}>Fill in at least one variant (label, price, stock)</p>
+          {/* Each variant's 3 inputs get a shared border/background so they
+              read as one grouped row even when they wrap onto separate
+              lines at narrow widths -- previously Label+Price sat on one
+              line and Stock wrapped alone underneath with nothing tying it
+              back to the other two, reading as three unrelated fields. */}
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
-              <input style={{ flex: "2 1 160px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantLabel-${i}`} placeholder="Label (e.g. A5)" />
-              <input style={{ flex: "1 1 90px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantPrice-${i}`} type="number" min={0} step="0.01" placeholder="Price" />
-              <input style={{ flex: "1 1 90px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantStock-${i}`} type="number" min={0} placeholder="Stock" />
+            <div key={i} style={{ border: "1px solid #eee", borderRadius: 4, padding: 8, marginBottom: 8 }}>
+              <p style={{ fontSize: 11, color: "#999", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Variant {i + 1}
+                {i > 0 && " (optional)"}
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <input style={{ flex: "2 1 160px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantLabel-${i}`} placeholder="Label (e.g. A5)" />
+                <input style={{ flex: "1 1 90px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantPrice-${i}`} type="number" min={0} step="0.01" placeholder="Price" />
+                <input style={{ flex: "1 1 90px", minWidth: 0, padding: 6, fontSize: 13, boxSizing: "border-box" }} name={`variantStock-${i}`} type="number" min={0} placeholder="Stock" />
+              </div>
             </div>
           ))}
 
@@ -997,9 +1035,14 @@ export default async function VendorDashboardPage({
               <ActionForm action={createFreebie} successMessage="Freebie added." resetOnSuccess>
                 <input type="hidden" name="artistId" value={artist.id} />
                 <label style={{ fontSize: 12, color: "#666" }}>Title</label>
-                <input style={inputStyle} name="title" required />
+                {/* Same DOM-reuse bug as the product Name field above (see
+                    that comment, and DashboardTabs.tsx's key={"{active}"}
+                    fix) -- this is what actually stopped it arriving
+                    pre-filled with the stall's own name. autoComplete="off"
+                    here is just defense-in-depth. */}
+                <input style={inputStyle} name="title" autoComplete="off" required />
                 <label style={{ fontSize: 12, color: "#666" }}>Description</label>
-                <textarea style={{ ...inputStyle, minHeight: 70 }} name="description" />
+                <textarea style={{ ...inputStyle, minHeight: 70 }} name="description" autoComplete="off" />
                 <label style={{ fontSize: 12, color: "#666" }}>Category</label>
                 <select style={inputStyle} name="category" defaultValue={FREEBIE_CATEGORY_ORDER[0]} required>
                   {FREEBIE_CATEGORY_ORDER.map((cat) => (
@@ -1093,7 +1136,7 @@ export default async function VendorDashboardPage({
               {offlineSales.length === 0 ? (
                 <p style={{ fontSize: 13, color: "#999" }}>Nothing logged yet.</p>
               ) : (
-                <div style={{ maxHeight: 320, overflowY: "auto" }}>
+                <div>
                   {offlineSales.map((s) => (
                     <p key={s.id} style={{ fontSize: 13, margin: "4px 0" }}>
                       {s.products?.name ?? "(deleted product)"} — {s.product_variants?.label ?? "-"} &times; {s.quantity} — Rs.{" "}
